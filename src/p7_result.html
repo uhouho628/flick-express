@@ -1,0 +1,50 @@
+<script>
+// ---- 結果（ご乗車記録） ----
+function rankText(r, id) {
+  if (r >= 2)   return "乗り放題を使い倒しました。乗り鉄の鑑です";
+  if (r >= 1.5) return "かなりおトク。指先が特急並みです";
+  if (r >= 1)   return "元が取れました。いい旅でした";
+  if (r >= .7)  return "あと少しで元が取れます";
+  if (r >= .4)  return "途中下車が多めの旅でした";
+  return id === "kaku" ? "まずはゆっくり指ならしから" : "まずは各停でゆっくり指ならし";
+}
+function showResult() {
+  const c = G.c, diff = G.fare - c.price;
+  const playSec = (c.time + G.bonus);
+  const kps = G.keys / playSec;
+  const acc = G.keys + G.miss ? G.keys / (G.keys + G.miss) * 100 : 0;
+  const okN = G.rides.filter(r => r.ok).length, lateN = G.rides.length - okN;
+  const best = store.get("best", {}), bk = bestKey(c.id, G.region);
+  const isBest = best[bk] == null || G.fare > best[bk];
+  if (isBest) { best[bk] = G.fare; store.set("best", best); }
+  const prefN = new Set(G.rides.filter(r => r.ok).map(r => r.pref)).size;
+  const rname = REGIONS.find(r => r.id === G.region).name;
+  $("receipt").innerHTML = `
+    <div class="r-title">ご乗車記録</div>
+    <div class="r-sub">フリック特急 ${rname}・${c.label}・1日乗車券</div>
+    <div class="r-big ${diff >= 0 ? "good" : "bad"}">${diff > 0 ? yen(diff) + " おトク" : diff === 0 ? "±¥0 ぴったり" : yen(-diff) + " 損"}<small>${rankText(G.fare / c.price, c.id)}</small></div>
+    <dl class="r-rows">
+      <dt>1日乗車券</dt><dd>${yen(c.price)}</dd>
+      <dt>乗った電車の運賃</dt><dd>${yen(G.fare)}</dd>
+      <dt>乗車 / 乗り遅れ</dt><dd>${okN}本 / ${lateN}本</dd>
+      <dt>乗った駅の都道府県</dt><dd>${prefN}</dd>
+      <dt class="sum">正しく打ったキー</dt><dd class="sum">${G.keys}回</dd>
+      <dt>ミス</dt><dd>${G.miss}回（正確さ ${acc.toFixed(1)}%）</dd>
+      <dt>平均キータイプ</dt><dd>${kps.toFixed(2)}回/秒</dd>
+      <dt>最大連続ノーミス</dt><dd>${G.maxCombo}本</dd>
+      <dt>ボーナス時間</dt><dd>+${G.bonus}秒</dd>
+    </dl>
+    <div class="r-rank">${isBest ? '<span class="r-best">自己ベスト更新</span>　' : ""}このコースの自己ベスト ${yen(best[bk])}</div>`;
+  $("history").innerHTML = G.rides.length ? `<h3>乗車履歴</h3><ol>${G.rides.map((r, i) => `
+    <li class="${r.ok ? "" : "miss"}"><span>${i + 1}</span><span>${r.disp}<small>${PREFS[r.pref - 1]}</small></span><span>${r.ok ? yen(r.fare) : "乗り遅れ"}</span></li>`).join("")}</ol>` : "";
+  show("result");
+}
+
+// ---- 起動 ----
+syncSoundIcon();
+renderRegions();
+renderTickets();
+show("title");
+addEventListener("keydown", e => { if (e.key === "Escape" && G) quit(); });
+addEventListener("resize", () => { if (G?.cur) { fitText($("b-dest"), G.cur.disp, 34, "--dest-size"); fitText($("b-read"), G.cur.read.join(""), 22, "--read-size", 1.03); renderReading(); } });
+</script>

@@ -1,0 +1,97 @@
+<title>フリック特急</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap">
+<style>
+/* Layout: one-screen phone app — HUD / 発車標(LED) / ホームと電車 / フリックキー の縦積み。PCでは中央 480px の列 */
+:root{
+  --bg:#e4eaef; --fg:#18212b; --muted:#5d6b78; --line-soft:#c7d0d8;
+  --sky-top:#cfdbe5; --sky-bot:#eef2f5; --wall:#d9dfe4; --pillar:#bcc5cd;
+  --platform:#b3b9be; --platform-dot:#a5abb1; --tactile:#f1bf00; --edge:#f7f7f2;
+  --kbd-bg:#cfd4da; --key:#ffffff; --key-fn:#aab2bc; --key-fg:#111820; --key-press:#9fb8d6;
+  --pop:#ffffff; --pop-fg:#111820; --pop-hit:#2f6fd0; --pop-hit-fg:#ffffff;
+  --card:#ffffff; --ticket:#dff1e6; --ticket-ink:#2f4a3a; --ticket-pat:rgba(47,110,74,.08);
+  --led-bg:#0c0d0e; --led-frame:#2a2d31; --led:#ffa31a; --led-dim:#5a3a10; --led-rest:#b07020; --led-green:#61f25b; --led-red:#ff4b3e;
+  --car:#d6dbe0; --car-shade:#aab2ba; --glass:#3b4e60; --glass-hi:#6f8aa3; --bogie:#2a2e33;
+  --kaku:#1f7a3f; --kaisoku:#e26a14; --tokkyu:#cf2b2b;
+  --good:#1f8a4c; --bad:#c9372c; --gold:#b98200;
+  --f-led:"DotGothic16", "Hiragino Kaku Gothic ProN", monospace;
+  --f-ui:"Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --line:var(--kaku);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e1319; --fg:#e5ebf1; --muted:#93a1ae; --line-soft:#2a333d;
+  --sky-top:#0b1220; --sky-bot:#1a2433; --wall:#161d26; --pillar:#222b36;
+  --platform:#3a4048; --platform-dot:#33393f; --tactile:#c9a000; --edge:#cfd2cc;
+  --kbd-bg:#1a1f25; --key:#454c55; --key-fn:#2c333b; --key-fg:#f1f4f7; --key-press:#3d5f8c;
+  --pop:#5a626c; --pop-fg:#f6f8fa; --pop-hit:#3d84f0; --pop-hit-fg:#ffffff;
+  --card:#161d25; --ticket:#1b2c23; --ticket-ink:#bfe3cc; --ticket-pat:rgba(150,220,180,.06);
+  --car:#9aa4ad; --car-shade:#6c7680; --glass:#f2d59a; --glass-hi:#fff0c9; --bogie:#0b0d10;
+  --good:#45c27a; --bad:#ff6b5e; --gold:#e8b938;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0e1319; --fg:#e5ebf1; --muted:#93a1ae; --line-soft:#2a333d;
+  --sky-top:#0b1220; --sky-bot:#1a2433; --wall:#161d26; --pillar:#222b36;
+  --platform:#3a4048; --platform-dot:#33393f; --tactile:#c9a000; --edge:#cfd2cc;
+  --kbd-bg:#1a1f25; --key:#454c55; --key-fn:#2c333b; --key-fg:#f1f4f7; --key-press:#3d5f8c;
+  --pop:#5a626c; --pop-fg:#f6f8fa; --pop-hit:#3d84f0; --pop-hit-fg:#ffffff;
+  --card:#161d25; --ticket:#1b2c23; --ticket-ink:#bfe3cc; --ticket-pat:rgba(150,220,180,.06);
+  --car:#9aa4ad; --car-shade:#6c7680; --glass:#f2d59a; --glass-hi:#fff0c9; --bogie:#0b0d10;
+  --good:#45c27a; --bad:#ff6b5e; --gold:#e8b938;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#app{height:100%;max-width:480px;margin:0 auto;display:flex;flex-direction:column;position:relative;overflow:hidden}
+button{font:inherit;color:inherit}
+button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline-offset:2px}
+.screen{flex:1;min-height:0;display:flex;flex-direction:column}
+
+/* ---------- タイトル ---------- */
+#screen-title{overflow-y:auto;padding-inline:16px;padding-block:18px 24px;gap:18px;touch-action:pan-y}
+.screen > *{flex-shrink:0}
+.sign{background:#fbfbf8;color:#1b1f23;border-radius:6px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 6px 18px rgba(0,0,0,.12);overflow:hidden;border:1px solid #d8dbd6}
+.sign-main{padding:14px 16px 10px;text-align:center}
+.sign-kanji{font-weight:900;font-size:clamp(36px,11vw,52px);letter-spacing:.06em;line-height:1.05}
+.sign-kana{font-weight:700;font-size:15px;letter-spacing:.5em;margin-top:4px;padding-left:.5em}
+.sign-roma{font-size:12px;letter-spacing:.2em;color:#5c6670;margin-top:2px}
+.sign-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;background:var(--kaku);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;gap:8px}
+.sign-bar .no{background:#fff;color:var(--kaku);border-radius:4px;padding:1px 6px;font-size:12px;font-weight:900}
+.sign-bar span:first-child{text-align:left}.sign-bar span:last-child{text-align:right}
+.lede{font-size:14px;line-height:1.75;color:var(--fg);max-width:36em}
+.lede b{font-weight:700}
+.section-label{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+.tickets{display:grid;gap:12px}
+.ticket{position:relative;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:end;text-align:left;cursor:pointer;
+  background:var(--ticket);color:var(--ticket-ink);border:none;border-radius:6px;padding:12px 16px 12px 22px;
+  background-image:repeating-linear-gradient(45deg,var(--ticket-pat) 0 2px,transparent 2px 7px),repeating-linear-gradient(-45deg,var(--ticket-pat) 0 2px,transparent 2px 7px);
+  box-shadow:0 1px 0 rgba(0,0,0,.06),0 3px 10px rgba(0,0,0,.08);transition:transform .12s}
+.ticket:active{transform:scale(.98)}
+.ticket::before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--c);border-radius:6px 0 0 6px}
+.ticket::after{content:"";position:absolute;right:86px;top:10px;bottom:10px;border-left:2px dashed color-mix(in srgb,var(--ticket-ink) 30%,transparent)}
+.t-kind{grid-column:1/-1;font-size:11px;font-weight:700;letter-spacing:.18em;opacity:.75}
+.t-name{font-size:22px;font-weight:900;display:flex;align-items:center;gap:8px}
+.t-badge{font-family:var(--f-led);font-size:13px;font-weight:400;color:#fff;background:var(--c);padding:2px 6px;border-radius:3px;letter-spacing:.05em}
+.t-desc{font-size:12px;opacity:.85;grid-column:1}
+.t-price{grid-row:2/4;grid-column:2;width:70px;text-align:right;font-variant-numeric:tabular-nums}
+.t-price b{display:block;font-size:20px;font-weight:900}
+.t-price small{font-size:11px;opacity:.8}
+.t-best{grid-column:1/-1;font-size:11px;opacity:.8;font-variant-numeric:tabular-nums;min-height:1em}
+.settings{display:flex;flex-wrap:wrap;gap:10px}
+.regions{display:flex;flex-wrap:wrap;gap:6px;margin-top:-8px}
+.chip{border:1px solid var(--line-soft);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.ticket:disabled{opacity:.45;cursor:not-allowed}
+.tickets{margin-top:-8px}
+.toggle{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line-soft);border-radius:999px;padding:7px 14px 7px 10px;font-size:13px;cursor:pointer}
+.toggle i{width:30px;height:18px;border-radius:9px;background:var(--line-soft);position:relative;transition:background .15s}
+.toggle i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.toggle[aria-pressed="true"] i{background:var(--kaku)}
+.toggle[aria-pressed="true"] i::after{transform:translateX(12px)}
+.howto{font-size:12px;line-height:1.7;color:var(--muted);border-top:1px solid var(--line-soft);padding-top:12px}
+.credit{font-size:11px;line-height:1.6;color:var(--muted);margin:0}
+.credit a{color:inherit}
+.howto kbd{font-family:var(--f-ui);font-weight:700;color:var(--fg);background:var(--card);border:1px solid var(--line-soft);border-radius:4px;padding:0 5px}
+</style>

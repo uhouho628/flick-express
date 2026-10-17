@@ -1,0 +1,140 @@
+<style>
+/* ---------- ゲーム画面 ---------- */
+#screen-game{touch-action:none}
+.hud{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding-inline:12px;padding-block:8px 6px}
+.hud-time{font-variant-numeric:tabular-nums;font-weight:900;font-size:22px;line-height:1;min-width:4.2em}
+.hud-time small{font-size:11px;font-weight:700;color:var(--muted);margin-left:2px}
+.hud-time.low{color:var(--bad)}
+.hud-fare{min-width:0}
+.hud-fare-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hud-fare-row b{color:var(--fg);font-size:15px;font-weight:900}
+.hud-fare-row > span{white-space:nowrap}
+.hud-fare-row b.over{color:var(--good)}
+.meter{height:6px;border-radius:3px;background:var(--line-soft);overflow:hidden;margin-top:3px}
+.meter i{display:block;height:100%;width:0;background:var(--line);transition:width .25s}
+.meter i.over{background:var(--good)}
+.hud-btns{display:flex;gap:4px}
+.icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--line-soft);background:var(--card);display:grid;place-items:center;cursor:pointer;padding:0}
+.icon-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* 発車標 (LED) */
+.board{margin-inline:10px;background:var(--led-bg);border:4px solid var(--led-frame);border-radius:6px;padding:8px 10px 7px;
+  font-family:var(--f-led);color:var(--led);position:relative;overflow:hidden;
+  background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1.4px);background-size:4px 4px}
+.board-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--led-rest)}
+#b-line{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#b-pref{flex-shrink:0;white-space:nowrap}
+.board-head .kind{flex-shrink:0;white-space:nowrap}
+.board-head .no{flex-shrink:0}
+.board-head .kind{color:#0c0d0e;background:var(--line);font-size:13px;padding:0 6px;border-radius:2px;line-height:1.5}
+.board-head .k-kaku{background:var(--led-green)}.board-head .k-kaisoku{background:var(--led)}.board-head .k-tokkyu{background:var(--led-red)}
+.board-head .no{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--led)}
+.board-head .no b{font-weight:400;font-size:15px}
+.dest{white-space:nowrap;line-height:1.15;margin-top:4px;font-size:var(--dest-size,34px);text-shadow:0 0 6px rgba(255,163,26,.45);min-height:1.15em}
+.dest.two,.reading.two{white-space:normal;line-break:anywhere;word-break:break-all}
+.reading{white-space:nowrap;margin-top:2px;font-size:var(--read-size,20px);line-height:1.3;letter-spacing:.02em;min-height:1.3em}
+.reading .done{color:var(--led);text-shadow:0 0 5px rgba(255,163,26,.5)}
+.reading .pend{color:#0c0d0e;background:var(--led);border-radius:1px}
+.reading .rest{color:var(--led-rest)}
+.reading .cur{color:#fff4dc;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:2px}
+.board.miss{animation:boardMiss .22s,boardFlash .35s}
+@keyframes boardMiss{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes boardFlash{0%,100%{border-color:var(--led-frame)}25%{border-color:var(--led-red)}}
+.dwell{height:5px;margin-top:6px;background:#26190a;border-radius:2px;overflow:hidden}
+.dwell i{display:block;height:100%;width:100%;background:var(--led);transform-origin:left;transform:scaleX(1)}
+.dwell i.hurry{background:var(--led-red)}
+.board-msg{position:absolute;inset:0;display:grid;place-items:center;background:var(--led-bg);font-size:22px;text-align:center;line-height:1.4}
+.board-msg small{display:block;font-size:13px;color:var(--led-dim)}
+
+/* ホームと電車 */
+.scene{flex:1;min-height:0;position:relative;overflow:hidden;margin-top:8px;
+  background:linear-gradient(var(--sky-top),var(--sky-bot) 60%)}
+.scene::before{content:"";position:absolute;inset:0 0 auto 0;height:14%;background:var(--wall);border-bottom:3px solid var(--pillar);z-index:0}
+.pillars{position:absolute;inset:0;z-index:0;background:repeating-linear-gradient(90deg,transparent 0 31%,var(--pillar) 31% 33%,transparent 33% 50%);opacity:.6}
+.train{position:absolute;left:-12%;width:124%;bottom:20%;height:64%;z-index:1;transform:translateX(100%);will-change:transform}
+.car{position:absolute;inset:0 0 7% 0;border-radius:10px 6px 6px 10px;
+  background:linear-gradient(var(--car) 0 70%,var(--car-shade));box-shadow:inset 0 2px 0 rgba(255,255,255,.35);
+  clip-path:polygon(4.5% 0,100% 0,100% 100%,0 100%,0 38%)}
+.stripe{position:absolute;left:0;right:0;top:62%;height:9%;background:var(--line)}
+.stripe2{position:absolute;left:0;right:0;top:73%;height:3%;background:var(--line);opacity:.55}
+.wins{position:absolute;left:6%;right:2%;top:14%;height:38%;display:flex;gap:1.6%}
+.wins span{flex:1;border-radius:4px;background:linear-gradient(160deg,var(--glass-hi),var(--glass) 45%);box-shadow:inset 0 0 0 2px rgba(0,0,0,.18)}
+.wins span.door{flex:.9;margin-block:-6% -38%;background:linear-gradient(var(--car),var(--car-shade));box-shadow:inset 0 0 0 2px rgba(0,0,0,.22);position:relative;border-radius:3px}
+.wins span.door::before{content:"";position:absolute;left:16%;right:16%;top:10%;height:36%;border-radius:3px;background:linear-gradient(160deg,var(--glass-hi),var(--glass) 45%)}
+.wins span.door::after{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:2px solid rgba(0,0,0,.28)}
+.side-led{position:absolute;top:4%;right:31%;width:16%;height:8%;background:#0c0d0e;border-radius:2px;font-family:var(--f-led);color:var(--led);font-size:clamp(8px,2.2vw,11px);display:grid;place-items:center;overflow:hidden;white-space:nowrap}
+.bogie{position:absolute;bottom:0;height:12%;width:14%;background:var(--bogie);border-radius:0 0 8px 8px}
+.bogie.b1{left:12%}.bogie.b2{right:10%}
+.platform{position:absolute;left:0;right:0;bottom:0;height:24%;z-index:2;
+  background:var(--platform);background-image:radial-gradient(var(--platform-dot) 1px,transparent 1.5px);background-size:7px 7px;border-top:4px solid var(--edge)}
+.platform::before{content:"";position:absolute;left:0;right:0;top:16%;height:22%;background:var(--tactile);
+  background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 2px,transparent 2px 9px)}
+.toast{position:absolute;left:50%;top:22%;transform:translate(-50%,0);z-index:3;font-weight:900;font-size:20px;white-space:nowrap;
+  padding:4px 14px;border-radius:999px;background:var(--card);box-shadow:0 4px 14px rgba(0,0,0,.18);pointer-events:none;opacity:0}
+.toast.show{animation:toast 1s ease-out forwards}
+.toast.good{color:var(--good)}.toast.bad{color:var(--bad)}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,8px)}12%{opacity:1;transform:translate(-50%,0)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-10px)}}
+.combo{position:absolute;right:10px;top:16%;z-index:3;font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.combo b{font-size:18px;color:var(--fg)}
+
+/* フリックキーボード */
+.kbd{background:var(--kbd-bg);padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(3,1fr);gap:6px;touch-action:none;position:relative;z-index:4}
+.key{height:clamp(46px,7.4vh,60px);border-radius:7px;background:var(--key);color:var(--key-fg);border:none;box-shadow:0 1px 0 rgba(0,0,0,.28);
+  font-size:22px;font-weight:700;display:grid;place-items:center;position:relative;touch-action:none;cursor:pointer;padding:0}
+.key.fn{background:var(--key-fn);font-size:15px}
+.key.down{background:var(--key-press)}
+.key small{position:absolute;font-size:9px;font-weight:400;opacity:.5;line-height:1}
+.key .hint-dir{position:absolute;top:3px;right:4px;font-size:11px;color:var(--pop-hit-fg);background:var(--pop-hit);border-radius:3px;padding:1px 3px;font-weight:900;line-height:1}
+.key.hint{box-shadow:0 0 0 3px var(--pop-hit) inset,0 1px 0 rgba(0,0,0,.28)}
+.pop{position:fixed;z-index:20;pointer-events:none;display:grid;grid-template-columns:repeat(3,var(--cell));grid-template-rows:repeat(3,var(--cell));--cell:54px}
+.pop span{display:grid;place-items:center;font-size:24px;font-weight:700;background:var(--pop);color:var(--pop-fg);box-shadow:0 2px 10px rgba(0,0,0,.28)}
+.pop span:empty{visibility:hidden}
+.pop span.hit{background:var(--pop-hit);color:var(--pop-hit-fg)}
+.pop .c{grid-area:2/2;border-radius:8px}.pop .l{grid-area:2/1;border-radius:10px 0 0 10px}.pop .r{grid-area:2/3;border-radius:0 10px 10px 0}
+.pop .u{grid-area:1/2;border-radius:10px 10px 0 0}.pop .d{grid-area:3/2;border-radius:0 0 10px 10px}
+.pop.mod span{font-size:18px}
+
+/* ---------- 結果 ---------- */
+#screen-result{overflow-y:auto;padding-inline:16px;padding-block:16px 24px;gap:14px;touch-action:pan-y}
+.receipt{background:var(--card);border-radius:4px;padding:18px 18px 14px;box-shadow:0 2px 14px rgba(0,0,0,.12);font-variant-numeric:tabular-nums;position:relative}
+.receipt::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:8px;background:linear-gradient(-45deg,transparent 6px,var(--card) 0) 0 0/12px 8px,linear-gradient(45deg,transparent 6px,var(--card) 0) 0 0/12px 8px}
+.r-title{text-align:center;font-weight:900;font-size:17px;letter-spacing:.3em;padding-left:.3em}
+.r-sub{text-align:center;font-size:12px;color:var(--muted);margin-top:2px}
+.r-big{text-align:center;margin:14px 0 6px;font-weight:900;font-size:clamp(30px,9vw,40px);line-height:1.1}
+.r-big.good{color:var(--good)}.r-big.bad{color:var(--bad)}
+.r-big small{display:block;font-size:14px;font-weight:700;color:var(--fg);margin-top:4px}
+.r-rows{display:grid;grid-template-columns:1fr auto;gap:6px 0;font-size:14px;border-top:1px dashed var(--line-soft);padding-top:10px;margin-top:10px}
+.r-rows dt{color:var(--muted)}.r-rows dd{margin:0;padding-left:12px;text-align:right;font-weight:700}
+.r-rows .sum{border-top:1px solid var(--line-soft);padding-top:6px}
+.r-rank{text-align:center;font-size:13px;margin-top:12px;padding:8px;border-radius:4px;background:color-mix(in srgb,var(--line) 12%,transparent)}
+.r-best{color:var(--gold);font-weight:900}
+.history{font-size:12px;font-variant-numeric:tabular-nums}
+.history h3{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted);margin:0 0 6px}
+.history ol{list-style:none;margin:0;padding:0 6px 0 0;display:grid;gap:2px;max-height:220px;overflow-y:auto}
+.history li{display:grid;grid-template-columns:2.2em 1fr auto;gap:8px;padding:4px 2px;border-bottom:1px solid var(--line-soft)}
+.history li.miss{color:var(--muted)}
+.history li span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history li small{margin-left:6px;color:var(--muted);font-size:11px}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{border:none;border-radius:10px;padding:13px 10px;font-weight:900;font-size:15px;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-soft)}
+.btn.primary{background:var(--line);color:#fff;box-shadow:none}
+@keyframes toastFade{0%,80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){.toast.show{animation-name:toastFade}.board.miss{animation:boardFlash .35s}}
+
+/* 細い画面：右の「乗車券」ラベルを省く */
+@media (max-width:400px){.hud-fare-row > span:last-child .lbl{display:none}}
+/* 背の低い画面：HUD・発車標・キーを詰めて、キーボード4段を必ず収める */
+@media (max-height:560px){
+  .hud{padding-block:4px 2px}.hud-time{font-size:19px}.icon-btn{width:30px;height:30px}
+  .board{padding:5px 8px 4px;border-width:3px}.dwell{margin-top:3px}.scene{margin-top:4px}
+  .kbd{gap:4px;padding-top:4px}.key{height:clamp(34px,8.4vh,46px);font-size:20px}
+}
+/* スマホ横向き：左に発車標と電車、右にキーボード */
+@media (orientation:landscape) and (max-height:500px){
+  #app{max-width:960px}
+  #screen-game{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,42%);grid-template-rows:auto auto minmax(0,1fr)}
+  .hud{grid-column:1;grid-row:1}.board{grid-column:1;grid-row:2}.scene{grid-column:1;grid-row:3}
+  .kbd{grid-column:2;grid-row:1/4;grid-template-rows:repeat(4,minmax(0,1fr));padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+  .key{height:auto}
+}
+</style>

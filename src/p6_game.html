@@ -1,0 +1,275 @@
+<script>
+// ---- 効果音（Web Audio、最初のタップで解禁） ----
+const Sfx = (() => {
+  let ctx = null, on = true;
+  function unlock() {
+    if (!on) return;
+    try { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended") ctx.resume(); } catch (_) { ctx = null; }
+  }
+  function tone(freq, t0, dur, type = "sine", vol = .12) {
+    if (!on || !ctx) return;
+    const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + t0;
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + dur + .02);
+  }
+  return {
+    unlock, get on() { return on; }, set on(v) { on = v; if (v) unlock(); },
+    key()  { tone(1400, 0, .04, "triangle", .05); },
+    miss() { tone(170, 0, .12, "square", .06); },
+    board(){ tone(1319, 0, .35, "sine", .12); tone(1047, .16, .5, "sine", .12); },
+    late() { tone(392, 0, .18, "triangle", .1); tone(311, .16, .3, "triangle", .1); },
+    melody(){ [784, 988, 1175, 1568, 1175, 1319].forEach((f, i) => tone(f, i * .13, .22, "triangle", .08)); },
+    end()  { [1047, 784, 659, 523].forEach((f, i) => tone(f, i * .18, .4, "sine", .1)); },
+  };
+})();
+
+// ---- 保存（使えない環境では黙って無視） ----
+const store = {
+  mem: {},
+  get(k, d) {
+    if (k in this.mem) return this.mem[k];
+    try { const v = localStorage.getItem("flickExpress." + k); return v == null ? d : (this.mem[k] = JSON.parse(v)); } catch (_) { return d; }
+  },
+  set(k, v) { this.mem[k] = v; try { localStorage.setItem("flickExpress." + k, JSON.stringify(v)); } catch (_) {} },
+};
+const opts = { guide: store.get("guide", true), sound: store.get("sound", true) };
+Sfx.on = opts.sound;
+
+const $ = id => document.getElementById(id);
+const yen = n => "¥" + n.toLocaleString("ja-JP");
+const fareOf = len => Math.max(100, Math.round((100 + (len - 3) * 45) / 10) * 10);
+const screens = { title: $("screen-title"), game: $("screen-game"), result: $("screen-result") };
+function show(name) { for (const [k, el] of Object.entries(screens)) el.hidden = k !== name; }
+
+// ---- タイトル ----
+const lenOf = s => [...s[1]].length;
+let region = store.get("region", "all");
+if (!REGIONS.some(r => r.id === region)) region = "all";
+function poolOf(courseId, regionId) {
+  const c = COURSES[courseId], r = REGIONS.find(x => x.id === regionId);
+  return STATIONS.filter(s => (!r.p || r.p.includes(s[2])) && lenOf(s) >= c.min && lenOf(s) <= c.max);
+}
+const bestKey = (courseId, regionId) => courseId + ":" + regionId;
+function renderRegions() {
+  $("regions").innerHTML = REGIONS.map(r =>
+    `<button type="button" class="chip" data-region="${r.id}" aria-pressed="${r.id === region}">${r.name}</button>`).join("");
+}
+function renderTickets() {
+  const best = store.get("best", {});
+  const rname = REGIONS.find(r => r.id === region).name;
+  $("tickets").innerHTML = Object.values(COURSES).map(c => {
+    const n = poolOf(c.id, region).length, b = best[bestKey(c.id, region)];
+    return `
+    <button type="button" class="ticket" data-course="${c.id}" style="--c:${c.color}" ${n ? "" : "disabled"}>
+      <span class="t-kind">1日乗車券 ・ ${c.time}秒</span>
+      <span class="t-name"><span class="t-badge">${c.name}</span>${c.label}</span>
+      <span class="t-price"><small>大人</small><b>${yen(c.price)}</b></span>
+      <span class="t-desc">${c.desc}　${rname} ${n.toLocaleString("ja-JP")}駅</span>
+      <span class="t-best">${b != null ? "自己ベスト " + yen(b) : ""}</span>
+    </button>`;
+  }).join("");
+}
+$("regions").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  region = b.dataset.region; store.set("region", region); renderRegions(); renderTickets();
+});
+$("tickets").addEventListener("click", e => { const t = e.target.closest(".ticket"); if (t) { Sfx.unlock(); startGame(t.dataset.course); } });
+function bindToggle(id, key, apply) {
+  const b = $(id); b.setAttribute("aria-pressed", opts[key]);
+  b.addEventListener("click", () => { opts[key] = !opts[key]; store.set(key, opts[key]); b.setAttribute("aria-pressed", opts[key]); apply && apply(); });
+}
+bindToggle("opt-guide", "guide");
+bindToggle("opt-sound", "sound", () => { Sfx.on = opts.sound; syncSoundIcon(); });
+function syncSoundIcon() { $("btn-sound").style.opacity = opts.sound ? 1 : .45; $("btn-sound").setAttribute("aria-pressed", opts.sound); }
+$("btn-sound").addEventListener("click", () => { opts.sound = !opts.sound; store.set("sound", opts.sound); Sfx.on = opts.sound; syncSoundIcon(); $("opt-sound").setAttribute("aria-pressed", opts.sound); });
+
+// ---- ゲーム ----
+const trainEl = $("train"), boardEl = $("board"), toastEl = $("toast");
+let G = null;          // 1回分の状態
+let raf = 0, wakeLock = null, GEN = 0;
+
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function startGame(courseId) {
+  stopLoop();
+  const c = COURSES[courseId];
+  G = { c, region, deck: shuffle(poolOf(courseId, region)), deckPos: 0, phase: "ready", cur: null, pending: null,
+        fare: 0, keys: 0, miss: 0, combo: 0, maxCombo: 0, bonus: 0, rides: [], endAt: 0, startAt: 0, no: 0, gen: ++GEN };
+  document.documentElement.style.setProperty("--line", c.color);
+  $("hud-price").textContent = yen(c.price);
+  $("b-kind").textContent = c.name; $("b-kind").className = "kind k-" + c.id; $("side-led").textContent = c.name;
+  $("b-dest").textContent = ""; $("b-read").textContent = ""; $("b-sec").textContent = "--"; $("b-line").textContent = ""; $("b-pref").textContent = "";
+  $("combo").hidden = true; setHint(null);
+  toastEl.className = "toast"; toastEl.textContent = ""; boardEl.classList.remove("miss");
+  trainEl.getAnimations().forEach(a => a.cancel()); trainEl.style.transform = "translateX(100%)";
+  updateHud(c.time * 1000);
+  show("game");
+  try { navigator.wakeLock?.request("screen").then(l => wakeLock = l).catch(() => {}); } catch (_) {}
+  // 発車メロディ → 3, 2, 1
+  const gen = G.gen, msg = $("b-msg");
+  const rname = REGIONS.find(r => r.id === region).name;
+  msg.hidden = false; msg.innerHTML = `まもなく ${c.name}が<br>まいります<small>${rname}・${c.label}・${c.time}秒</small>`;
+  Sfx.melody();
+  const steps = ["3", "2", "1"];
+  steps.forEach((s, i) => setTimeout(() => { if (G?.gen === gen) msg.innerHTML = s; }, 1300 + i * 600));
+  setTimeout(() => {
+    if (G?.gen !== gen) return;
+    msg.hidden = true; G.phase = "play";
+    G.startAt = performance.now(); G.endAt = G.startAt + c.time * 1000;
+    nextTrain(); loop();
+  }, 1300 + steps.length * 600);
+}
+
+function nextTrain() {
+  if (G.deckPos >= G.deck.length) { G.deck = shuffle(G.deck); G.deckPos = 0; }
+  const [disp, read, pref, lines] = G.deck[G.deckPos++];
+  const line = LINES[lines[Math.floor(Math.random() * lines.length)]];
+  const arriveMs = reduced ? 120 : 520;
+  const dwell = (G.c.base + G.c.per * [...read].length) * 1000;
+  G.cur = { disp, pref, line, read: [...read], i: 0, miss: 0, fare: fareOf([...read].length), dwellEnd: performance.now() + arriveMs + dwell, dwell, arriveMs };
+  $("b-line").textContent = line; $("b-pref").textContent = PREFS[pref - 1];
+  G.pending = null; G.no++; G.phase = "play";
+  fitText($("b-dest"), disp, 34, "--dest-size");
+  fitText($("b-read"), read, 22, "--read-size", 1.03);
+  renderReading(); updateGuide();
+  trainEl.getAnimations().forEach(a => a.cancel());
+  trainEl.animate([{transform: "translateX(100%)"}, {transform: "translateX(0)"}], {duration: arriveMs, easing: "cubic-bezier(.12,.7,.25,1)", fill: "forwards"});
+}
+
+function fitText(el, text, max, prop, spacing = 1) {   // spacing：字間を含めた1字の幅（em）
+  if (innerHeight < 560) max = Math.round(max * .72);   // 背の低い画面では発車標を詰める
+  const w = boardEl.clientWidth - 24;
+  const n = [...text].length || 1;
+  let size = Math.min(max, Math.floor(w / (n * spacing))), two = false;
+  if (size < 15) { two = true; size = Math.min(max, Math.floor(w / (Math.ceil(n / 2) * spacing))); }   // 長すぎる駅名は2段で表示
+  el.classList.toggle("two", two);
+  el.style.setProperty(prop, size + "px");
+  el.textContent = text;
+}
+
+function renderReading() {
+  const { read, i } = G.cur, esc = s => s.replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+  const done = esc(read.slice(0, i).join(""));
+  const rest = esc(read.slice(i + 1).join(""));
+  const now = i < read.length ? (G.pending ? `<span class="pend">${G.pending}</span>` : `<span class="cur">${esc(read[i])}</span>`) : "";
+  $("b-read").innerHTML = `<span class="done">${done}</span>${now}<span class="rest">${rest}</span>`;
+}
+
+function updateGuide() {
+  if (!opts.guide || !G?.cur || G.phase !== "play") { setHint(null); return; }
+  const t = G.cur.read[G.cur.i];
+  if (t == null) { setHint(null); return; }
+  if (G.pending) { setHint("mod", {daku: 1, small: 2, handaku: 3}[VTYPE[t]] || 0); return; }
+  const pos = KEYPOS[BASE[t] || t];
+  setHint(pos ? pos.id : null, pos ? pos.dir : 0);
+}
+
+onKey = ev => {
+  if (!G || G.phase !== "play" || !G.cur) return;
+  const cur = G.cur, t = cur.read[cur.i];
+  if (ev.type === "kana") {
+    const abandoned = !!G.pending;                    // 濁点などを付けずに次の字へ進んだ
+    if (abandoned) { G.pending = null; miss(); }
+    if (ev.ch === t) { G.keys++; Sfx.key(); advance(); }
+    else if (BASE[t] && BASE[t] === ev.ch && t !== ev.ch) { G.pending = ev.ch; G.keys++; Sfx.key(); renderReading(); updateGuide(); }
+    else { if (!abandoned) miss(); renderReading(); updateGuide(); }
+  } else {
+    if (!G.pending) { miss(); return; }
+    const g = VAR[G.pending];
+    const next = ev.mode === "cycle" ? g[(g.indexOf(G.pending) + 1) % g.length] : g.find(ch => VTYPE[ch] === ev.mode);
+    // ゛小゜の払い間違いは打たせない（タップの切り替えは遠回りでも正解扱い）
+    if (!next || (ev.mode !== "cycle" && next !== t)) { miss(); return; }
+    G.pending = next; G.keys++; Sfx.key();
+    if (next === t) { G.pending = null; advance(); } else { renderReading(); updateGuide(); }
+  }
+};
+
+function miss() {
+  G.miss++; G.cur.miss++; Sfx.miss();
+  boardEl.classList.remove("miss"); void boardEl.offsetWidth; boardEl.classList.add("miss");
+  try { navigator.vibrate?.(25); } catch (_) {}
+}
+
+function advance() {
+  G.cur.i++;
+  renderReading();
+  if (G.cur.i >= G.cur.read.length) boarded(); else updateGuide();
+}
+
+function boarded() {
+  const cur = G.cur;
+  G.fare += cur.fare;
+  G.rides.push({ disp: cur.disp, pref: cur.pref, fare: cur.fare, ok: true, clean: cur.miss === 0 });
+  let msg = "乗車！ +" + yen(cur.fare);
+  if (cur.miss === 0) { G.combo++; G.endAt += 1000; G.bonus += 1; msg += "  +1秒"; } else G.combo = 0;
+  G.maxCombo = Math.max(G.maxCombo, G.combo);
+  Sfx.board(); toast(msg, "good"); depart();
+}
+
+function missedTrain() {
+  G.rides.push({ disp: G.cur.disp, pref: G.cur.pref, fare: 0, ok: false });
+  G.combo = 0; Sfx.late(); toast("乗り遅れ…", "bad"); depart();
+}
+
+function depart() {
+  G.phase = "depart"; G.pending = null; setHint(null);
+  $("combo").hidden = G.combo < 2; $("combo-n").textContent = G.combo;
+  updateHud(G.endAt - performance.now());
+  const gen = G.gen;
+  // 到着アニメの途中で打ち切っても、その位置からそのまま発車させる
+  trainEl.getAnimations().forEach(a => { try { a.commitStyles(); } catch (_) {} a.cancel(); });
+  const a = trainEl.animate([{transform: "translateX(-100%)"}], {duration: reduced ? 120 : 420, easing: "cubic-bezier(.6,0,.9,.5)", fill: "forwards"});
+  a.onfinish = () => { if (G?.gen === gen && G.phase === "depart") nextTrain(); };
+}
+
+function toast(text, cls) {
+  toastEl.textContent = text; toastEl.className = "toast " + cls;
+  void toastEl.offsetWidth; toastEl.classList.add("show");
+}
+
+function updateHud(leftMs) {
+  const s = Math.max(0, leftMs) / 1000;
+  $("hud-time").innerHTML = s.toFixed(1) + "<small>秒</small>";
+  $("hud-time").classList.toggle("low", s < 10);
+  const fare = G ? G.fare : 0, price = G ? G.c.price : 1;
+  $("hud-fare").textContent = yen(fare); $("hud-fare").classList.toggle("over", fare >= price);
+  $("hud-meter").style.width = Math.min(100, fare / price * 100) + "%"; $("hud-meter").classList.toggle("over", fare >= price);
+}
+
+function loop() {
+  const now = performance.now();
+  if (!G || (G.phase !== "play" && G.phase !== "depart")) return;
+  const left = G.endAt - now;
+  updateHud(left);
+  if (G.phase === "play" && G.cur) {
+    const remain = G.cur.dwellEnd - now;
+    const frac = Math.max(0, Math.min(1, remain / G.cur.dwell));
+    const bar = $("b-dwell"); bar.style.transform = `scaleX(${frac})`; bar.classList.toggle("hurry", remain < 1500);
+    $("b-sec").textContent = Math.max(0, Math.ceil(remain / 1000)) + "秒";
+    if (remain <= 0) missedTrain();
+  }
+  if (left <= 0) { finish(); return; }
+  raf = requestAnimationFrame(loop);
+}
+function stopLoop() { cancelAnimationFrame(raf); raf = 0; }
+
+function finish() {
+  stopLoop(); G.phase = "over"; setHint(null);
+  updateHud(0); Sfx.end();
+  const msg = $("b-msg"); msg.hidden = false; msg.innerHTML = "本日の運転は<br>終了しました";
+  const gen = G.gen;
+  try { wakeLock?.release(); } catch (_) {} wakeLock = null;
+  setTimeout(() => { if (G?.gen === gen) showResult(); }, 1400);
+}
+
+function quit() {
+  GEN++; G = null; stopLoop(); setHint(null); popEl.hidden = true;
+  try { wakeLock?.release(); } catch (_) {} wakeLock = null;
+  renderTickets(); show("title");
+}
+$("btn-quit").addEventListener("click", quit);
+$("btn-menu").addEventListener("click", quit);
+$("btn-again").addEventListener("click", () => { Sfx.unlock(); startGame(G ? G.c.id : "kaku"); });
+</script>

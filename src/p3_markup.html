@@ -1,0 +1,83 @@
+<div id="app">
+
+<section id="screen-title" class="screen" aria-label="タイトル">
+  <div class="sign" role="img" aria-label="駅名標 フリック特急">
+    <div class="sign-main">
+      <div class="sign-kanji">フリック特急</div>
+      <div class="sign-kana">ふりっくとっきゅう</div>
+      <div class="sign-roma">FLICK EXPRESS</div>
+    </div>
+    <div class="sign-bar"><span>← たっぷ</span><span class="no">F 01</span><span>すわいぷ →</span></div>
+  </div>
+
+  <p class="lede">行先は<b>全国の駅名</b>。電車がホームを出る前に発車標の駅名を<b>フリック入力</b>で打ち切ると乗車。1日乗車券の値段より多く乗れたら<b>おトク</b>です。</p>
+
+  <div class="section-label">地方をえらぶ</div>
+  <div class="regions" id="regions" role="group" aria-label="地方"></div>
+
+  <div class="section-label">1日乗車券をえらぶ</div>
+  <div class="tickets" id="tickets"></div>
+
+  <div class="settings">
+    <button type="button" class="toggle" id="opt-guide" aria-pressed="true"><i></i>キーガイド</button>
+    <button type="button" class="toggle" id="opt-sound" aria-pressed="true"><i></i>効果音</button>
+  </div>
+
+  <div class="howto">
+    フリック：キーを押したまま 左・上・右・下 に払うと い・う・え・お の段。<br>
+    濁点・半濁点・小さい字は、元の字を打ってから <kbd>小゛゜</kbd> キー（タップで切り替え、左払い＝゛ 上払い＝小 右払い＝゜）。<br>
+    「ー」は <kbd>わ</kbd> キーを右に払う。ミスなく打ち切ると残り時間 +1秒。
+  </div>
+  <p class="credit">駅データ：<a href="https://github.com/TrainLCD/StationAPI" target="_blank" rel="noopener">TrainLCD/StationAPI</a>（MIT License, Copyright (c) 2019 TinyKitten）をもとに、読みを Wikidata・Wikipedia・各社の駅案内と照合して修正。2026年10月時点の営業中の駅。</p>
+</section>
+
+<section id="screen-game" class="screen" aria-label="ゲーム" hidden>
+  <div class="hud">
+    <div class="hud-time" id="hud-time">60.0<small>秒</small></div>
+    <div class="hud-fare">
+      <div class="hud-fare-row"><span><span class="lbl">運賃 </span><b id="hud-fare">¥0</b></span><span><span class="lbl">乗車券 </span><span id="hud-price">¥3,000</span></span></div>
+      <div class="meter"><i id="hud-meter"></i></div>
+    </div>
+    <div class="hud-btns">
+      <button type="button" class="icon-btn" id="btn-sound" aria-label="効果音を切り替え"><svg viewBox="0 0 24 24" id="ico-sound"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+      <button type="button" class="icon-btn" id="btn-quit" aria-label="やめてタイトルへ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+
+  <div class="board" id="board" aria-live="polite">
+    <div class="board-head"><span class="kind k-kaku" id="b-kind">各停</span><span id="b-line"></span><span id="b-pref"></span><span class="no" id="b-no">発車 <b id="b-sec">--</b></span></div>
+    <div class="dest" id="b-dest"></div>
+    <div class="reading" id="b-read"></div>
+    <div class="dwell"><i id="b-dwell"></i></div>
+    <div class="board-msg" id="b-msg" hidden></div>
+  </div>
+
+  <div class="scene" id="scene">
+    <div class="pillars"></div>
+    <div class="train" id="train">
+      <div class="car">
+        <div class="wins"><span></span><span class="door"></span><span></span><span></span><span class="door"></span><span></span><span></span><span class="door"></span><span></span><span></span><span class="door"></span><span></span></div>
+        <div class="stripe"></div><div class="stripe2"></div>
+        <div class="side-led" id="side-led">各停</div>
+      </div>
+      <div class="bogie b1"></div><div class="bogie b2"></div>
+    </div>
+    <div class="platform"></div>
+    <div class="combo" id="combo" hidden>連続 <b id="combo-n">0</b></div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <div class="kbd" id="kbd" role="group" aria-label="フリックキーボード"></div>
+</section>
+
+<section id="screen-result" class="screen" aria-label="結果" hidden>
+  <div class="receipt" id="receipt"></div>
+  <div class="btn-row">
+    <button type="button" class="btn" id="btn-menu">コースをえらぶ</button>
+    <button type="button" class="btn primary" id="btn-again">もう一度</button>
+  </div>
+  <div class="history" id="history"></div>
+</section>
+
+<div class="pop" id="pop" hidden><span class="u"></span><span class="l"></span><span class="c"></span><span class="r"></span><span class="d"></span></div>
+</div>
