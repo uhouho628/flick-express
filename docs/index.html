@@ -774,7 +774,7 @@ $("btn-again").addEventListener("click", () => { Sfx.unlock(); startGame(G ? G.c
 // iPhone の日本語入力が固まる（WebKit の不具合）ので、変換中の欄には触らない。
 const fields = [$("native-in"), $("native-in2")];
 const appEl = $("app"), tapType = $("tap-type");
-const NI = { fi: 0, base: 0, prevS: "", prevRaw: "", composing: false, consumed: "", len: 0, state: "ok", restKana: false, sawAscii: false,
+const NI = { fi: 0, base: 0, prevS: "", prevRaw: "", skip: [], kept: [], carry: "", romaUser: false, composing: false, consumed: "", len: 0, state: "ok", restKana: false, sawAscii: false,
              kanjiWarned: false, swapping: false, kbSeen: false };
 const isNative = () => opts.input === "native";
 const field = () => fields[NI.fi];
@@ -864,7 +864,7 @@ function evalTyped(s, t) {
     const rest = ch.slice(i);
     if (rest.some(c => /\p{Script=Han}/u.test(c))) return { k: j, rest, state: "kanji", len: ch.length };
     // フリック・トグル入力の途中（あ→い→う、ふ→ぶ）。ローマ字で打っているときは途中の字にならないので使わない
-    if (j < t.length && !NI.sawAscii && rest.length === 1 && keyOf(rest[0]) && keyOf(rest[0]) === keyOf(t[j]))
+    if (j < t.length && !NI.sawAscii && !NI.romaUser && rest.length === 1 && keyOf(rest[0]) && keyOf(rest[0]) === keyOf(t[j]))
       return { k: j, rest, state: "pend", len: ch.length };
     return { k: j, rest, state: "bad", len: ch.length };
   }
@@ -878,7 +878,7 @@ function nativeFocus() {
 const centerOf = ch => { const id = keyOf(ch); const k = id && KEYS.find(x => x.id === id); return k ? k.c[0] : null; };
 function resetJudge() {
   NI.len = 0; NI.state = "ok"; NI.restKana = false; NI.sawAscii = false; NI.kanjiWarned = false;
-  NI.prevS = ""; NI.prevRaw = "";
+  NI.prevS = ""; NI.prevRaw = ""; NI.skip = []; NI.kept = []; NI.carry = "";
   if (G) G.nat = { k: NI.base, rest: [], state: "ok" };
 }
 // もう一方の（空の）入力欄へフォーカスを移す。古い欄は確定された後で空にする
@@ -889,7 +889,7 @@ function swapField() {
   try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); }
   NI.swapping = false;
   if (document.activeElement === next) {
-    NI.fi = 1 - NI.fi; NI.consumed = ""; NI.composing = false;
+    NI.fi = fields.indexOf(next); NI.consumed = ""; NI.composing = false;
     setTimeout(() => { if (document.activeElement !== old) old.value = ""; }, 0);
     return;
   }
@@ -914,15 +914,29 @@ function rejectTyped(r, s, t) {
     renderReading();
     return;
   }
-  // 変換中の欄を書き換えると iPhone の日本語入力が固まるので、もう一方の欄へ移り、合っていた字までを確定扱いにする
-  let keep = r.k;
-  if (keep > 0 && /[ぁぃぅぇぉゃゅょゎ]/.test(r.rest[0] || "")) keep--;   // 小さい字は前の字と組なので、その字から打ち直し
+  // 変換中の欄を書き換えると iPhone の日本語入力が固まるので、もう一方の欄へ移り、直前の正しい状態から続ける
+  const pr = evalTyped(NI.prevS, t);
+  let keep = pr.k;
+  if (r.k > keep) keep = r.k - (/[ぁぃぅぇぉゃゅょゎ]/.test(r.rest[0] || "") ? 1 : 0);   // 小さい字は前の字と組なので、その字から打ち直し
+  // 日本語入力オンのローマ字で打ちかけていた分（s や sy）は、新しい欄の頭に足して続けられるようにする
+  const carry = keep === pr.k && pr.state === "pend" && pr.rest.length && pr.rest.every(isRoma) ? pr.rest.join("") : "";
   const ch = [...s];
-  // 「さ」（トグルの打ちはじめ）のすぐ後にフリックで正しい「し」を打った、のように最後の1字が合っていれば受け付ける
-  if (ch.length === keep + 2 && ch[keep + 1] === t[keep] && !isRoma(ch[keep + 1])) keep++;
+  if (!carry && !NI.romaUser && ch.length === keep + 2 && !isRoma(ch[keep + 1])) {
+    const c2 = ch[keep + 1], tk = t[keep];
+    // 「さ」（トグルの打ちはじめ）のすぐ後にフリックで正しい「し」を打った、のように最後の1字が合っていれば受け付ける
+    if (c2 === tk) keep++;
+    else if (c2 === BASE[tk] || c2 === centerOf(tk)) {
+      // 最後の字は日本語入力の中でまだ打ちかけ（゛・小で変わる）なので欄は移らず、間違えた字だけ読み飛ばす
+      NI.skip.push(NI.kept[keep]);
+      nativeInput();
+      return;
+    }
+  }
   NI.base += keep;
   resetJudge();
   swapField();
+  NI.carry = carry;
+  if (carry) { G.nat = { k: NI.base, rest: [...carry], state: "pend" }; NI.prevS = carry; NI.state = "pend"; NI.len = carry.length; }
   const full = G.cur.read, k = NI.base;
   if (k > (G.cur.maxK || 0)) { G.keys += k - (G.cur.maxK || 0); G.cur.maxK = k; }
   if (k >= full.length) { G.cur.i = full.length; renderReading(); boarded(); return; }
@@ -930,6 +944,7 @@ function rejectTyped(r, s, t) {
 }
 
 function nativeInput(e) {
+  if (NI.swapping) return;                                      // 欄を移っている最中に届く古い欄の確定は見ない
   if (e && e.target !== field()) return;                       // 切り替える前の欄で確定された字は見ない
   if (e && /^delete(Composition|ByComposition)/.test(e.inputType || "")) return;   // 確定の途中の一瞬だけ空になる知らせ
   const raw = field().value, v = normIn(raw);
@@ -941,6 +956,16 @@ function nativeInput(e) {
     const stripped = v.slice(NI.consumed.length);
     if (evalTyped(stripped, t).state !== "bad" || evalTyped(v, t).state === "bad") s = stripped; else NI.consumed = "";
   } else NI.consumed = "";
+  // 弾いたけれど変換中なので欄に残っている字を除く
+  const vch = [...s];
+  NI.kept = vch.map((_, i) => i).filter(i => !NI.skip.includes(i));
+  s = NI.kept.map(i => vch[i]).join("");
+  // 前の欄で打ちかけていたローマ字を頭に足す（新しい欄で日本語入力が母音をかなにしていたら戻す）
+  if (NI.carry) {
+    const c0 = [...s], vi = "あいうえお".indexOf(c0[0]);
+    if (vi >= 0) c0[0] = "aiueo"[vi];
+    s = NI.carry + c0.join("");
+  }
   if (/[a-z]/.test(s)) NI.sawAscii = true;
   let r = evalTyped(s, t);
   // 同じキーの別の字は、トグル入力の途中としてあり得るときだけ待つ。新しく足された字なら、そのキーの最初の字か
@@ -985,13 +1010,14 @@ for (const f of fields) {
   f.addEventListener("input", nativeInput);
   f.addEventListener("compositionstart", e => { if (e.target === field()) NI.composing = true; });
   f.addEventListener("compositionend", e => {
-    if (e.target !== field()) return;
+    if (e.target !== field() || NI.swapping) return;
     NI.composing = false;
     nativeInput();
     // 確定し終わって全部読み済みなら、ここで安全に空にできる
     if (NI.consumed && normIn(field().value) === NI.consumed) { field().value = ""; NI.consumed = ""; }
   });
   f.addEventListener("keydown", e => {
+    if (/^Key[A-Z]$/.test(e.code || "")) NI.romaUser = true;      // 実物のキーボードで打っている（ローマ字）
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter" || e.key === "Tab") e.preventDefault();
   });
@@ -1031,7 +1057,7 @@ window.visualViewport?.addEventListener("scroll", fitViewport);
 
 function nativeStart() {                     // チケットを押した流れのまま呼ぶ（キーボードを出すため）
   for (const f of fields) f.value = "";
-  NI.fi = 0; NI.base = 0; NI.consumed = ""; NI.composing = false; NI.kbSeen = false; resetJudge();
+  NI.fi = 0; NI.base = 0; NI.consumed = ""; NI.composing = false; NI.kbSeen = false; NI.romaUser = false; resetJudge();
   tapType.hidden = true;
   nativeFocus(); fitViewport();
 }
