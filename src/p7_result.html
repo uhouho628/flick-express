@@ -1,5 +1,6 @@
 <script>
 // ---- 結果（ご乗車記録） ----
+const SHARE_URL = "https://uhouho628.github.io/flick-express/";
 function rankText(r, id) {
   if (r >= 2)   return "乗り放題を使い倒しました。乗り鉄の鑑です";
   if (r >= 1.5) return "かなりおトク。指先が特急並みです";
@@ -35,6 +36,11 @@ function showResult() {
       <dt>ボーナス時間</dt><dd>+${G.bonus}秒</dd>
     </dl>
     <div class="r-rank">${isBest ? '<span class="r-best">自己ベスト更新</span>　' : ""}このコースの自己ベスト ${yen(best[bk])}</div>`;
+  // X（旧Twitter）の投稿画面を開くリンク。claude.ai 版から押しても公開中の GitHub 版を案内する
+  const head = diff > 0 ? yen(diff) + " おトク" : diff === 0 ? "ぴったり元が取れた" : yen(-diff) + " 損";
+  const text = `フリック特急【${rname}・${c.label}】で ${head}！${isBest ? "（自己ベスト更新）" : ""}\n`
+    + `${okN}本に乗車・${prefN}都道府県／正確さ ${acc.toFixed(1)}%・${kps.toFixed(2)}回/秒\n#フリック特急`;
+  $("btn-share").href = "https://x.com/intent/post?" + new URLSearchParams({ text, url: SHARE_URL });
   $("history").innerHTML = G.rides.length ? `<h3>乗車履歴</h3><ol>${G.rides.map((r, i) => `
     <li class="${r.ok ? "" : "miss"}"><span>${i + 1}</span><span>${r.disp}<small>${PREFS[r.pref - 1]}</small></span><span>${r.ok ? yen(r.fare) : "乗り遅れ"}</span></li>`).join("")}</ol>` : "";
   show("result");

@@ -118,6 +118,9 @@
 .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .btn{border:none;border-radius:10px;padding:13px 10px;font-weight:900;font-size:15px;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-soft)}
 .btn.primary{background:var(--line);color:#fff;box-shadow:none}
+.btn.share{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--x-bg);color:var(--x-fg);box-shadow:none;text-decoration:none;text-align:center}
+.btn.share svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
+.btn:focus-visible{outline:3px solid var(--pop-hit);outline-offset:2px}
 @keyframes toastFade{0%,80%{opacity:1}100%{opacity:0}}
 @media (prefers-reduced-motion: reduce){.toast.show{animation-name:toastFade}.board.miss{animation:boardFlash .35s}}
 

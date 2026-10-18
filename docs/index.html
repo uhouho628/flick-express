@@ -34,7 +34,7 @@ img{max-width:100%}
   --led-bg:#0c0d0e; --led-frame:#2a2d31; --led:#ffa31a; --led-dim:#5a3a10; --led-rest:#b07020; --led-green:#61f25b; --led-red:#ff4b3e;
   --car:#d6dbe0; --car-shade:#aab2ba; --glass:#3b4e60; --glass-hi:#6f8aa3; --bogie:#2a2e33;
   --kaku:#1f7a3f; --kaisoku:#e26a14; --tokkyu:#cf2b2b;
-  --good:#1f8a4c; --bad:#c9372c; --gold:#b98200;
+  --good:#1f8a4c; --bad:#c9372c; --gold:#b98200; --x-bg:#0f1419; --x-fg:#ffffff;
   --f-led:"DotGothic16", "Hiragino Kaku Gothic ProN", monospace;
   --f-ui:"Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
   --line:var(--kaku);
@@ -47,7 +47,7 @@ img{max-width:100%}
   --pop:#5a626c; --pop-fg:#f6f8fa; --pop-hit:#3d84f0; --pop-hit-fg:#ffffff;
   --card:#161d25; --ticket:#1b2c23; --ticket-ink:#bfe3cc; --ticket-pat:rgba(150,220,180,.06);
   --car:#9aa4ad; --car-shade:#6c7680; --glass:#f2d59a; --glass-hi:#fff0c9; --bogie:#0b0d10;
-  --good:#45c27a; --bad:#ff6b5e; --gold:#e8b938;
+  --good:#45c27a; --bad:#ff6b5e; --gold:#e8b938; --x-bg:#eef1f4; --x-fg:#0f1419;
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
@@ -58,7 +58,7 @@ img{max-width:100%}
   --pop:#5a626c; --pop-fg:#f6f8fa; --pop-hit:#3d84f0; --pop-hit-fg:#ffffff;
   --card:#161d25; --ticket:#1b2c23; --ticket-ink:#bfe3cc; --ticket-pat:rgba(150,220,180,.06);
   --car:#9aa4ad; --car-shade:#6c7680; --glass:#f2d59a; --glass-hi:#fff0c9; --bogie:#0b0d10;
-  --good:#45c27a; --bad:#ff6b5e; --gold:#e8b938;
+  --good:#45c27a; --bad:#ff6b5e; --gold:#e8b938; --x-bg:#eef1f4; --x-fg:#0f1419;
   color-scheme:dark;
 }
 html,body{height:100%}
@@ -235,6 +235,9 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
 .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .btn{border:none;border-radius:10px;padding:13px 10px;font-weight:900;font-size:15px;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-soft)}
 .btn.primary{background:var(--line);color:#fff;box-shadow:none}
+.btn.share{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--x-bg);color:var(--x-fg);box-shadow:none;text-decoration:none;text-align:center}
+.btn.share svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
+.btn:focus-visible{outline:3px solid var(--pop-hit);outline-offset:2px}
 @keyframes toastFade{0%,80%{opacity:1}100%{opacity:0}}
 @media (prefers-reduced-motion: reduce){.toast.show{animation-name:toastFade}.board.miss{animation:boardFlash .35s}}
 
@@ -331,6 +334,10 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
 
 <section id="screen-result" class="screen" aria-label="結果" hidden>
   <div class="receipt" id="receipt"></div>
+  <a class="btn share" id="btn-share" href="https://x.com/intent/post" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5L9 13 0 1.2h7.6l5.2 6.9 6.1-6.9zm-1.3 19.4h2L6.5 3.3H4.3l13.3 17.3z"/></svg>
+    結果を X でシェア
+  </a>
   <div class="btn-row">
     <button type="button" class="btn" id="btn-menu">コースをえらぶ</button>
     <button type="button" class="btn primary" id="btn-again">もう一度</button>
@@ -732,6 +739,7 @@ $("btn-again").addEventListener("click", () => { Sfx.unlock(); startGame(G ? G.c
 </script>
 <script>
 // ---- 結果（ご乗車記録） ----
+const SHARE_URL = "https://uhouho628.github.io/flick-express/";
 function rankText(r, id) {
   if (r >= 2)   return "乗り放題を使い倒しました。乗り鉄の鑑です";
   if (r >= 1.5) return "かなりおトク。指先が特急並みです";
@@ -767,6 +775,11 @@ function showResult() {
       <dt>ボーナス時間</dt><dd>+${G.bonus}秒</dd>
     </dl>
     <div class="r-rank">${isBest ? '<span class="r-best">自己ベスト更新</span>　' : ""}このコースの自己ベスト ${yen(best[bk])}</div>`;
+  // X（旧Twitter）の投稿画面を開くリンク。claude.ai 版から押しても公開中の GitHub 版を案内する
+  const head = diff > 0 ? yen(diff) + " おトク" : diff === 0 ? "ぴったり元が取れた" : yen(-diff) + " 損";
+  const text = `フリック特急【${rname}・${c.label}】で ${head}！${isBest ? "（自己ベスト更新）" : ""}\n`
+    + `${okN}本に乗車・${prefN}都道府県／正確さ ${acc.toFixed(1)}%・${kps.toFixed(2)}回/秒\n#フリック特急`;
+  $("btn-share").href = "https://x.com/intent/post?" + new URLSearchParams({ text, url: SHARE_URL });
   $("history").innerHTML = G.rides.length ? `<h3>乗車履歴</h3><ol>${G.rides.map((r, i) => `
     <li class="${r.ok ? "" : "miss"}"><span>${i + 1}</span><span>${r.disp}<small>${PREFS[r.pref - 1]}</small></span><span>${r.ok ? yen(r.fare) : "乗り遅れ"}</span></li>`).join("")}</ol>` : "";
   show("result");
