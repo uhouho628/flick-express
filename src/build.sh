@@ -2,7 +2,7 @@
 # index.html      … claude.ai Artifact 用（文書の骨組みは公開時に付く）
 # docs/index.html … GitHub Pages 用の完全なHTML文書
 cd "$(dirname "$0")"
-cat p1_style.html p2_style.html p3_markup.html p4_stations.html p5_kbd.html p6_game.html p7_result.html > ../index.html
+cat p1_style.html p2_style.html p3_markup.html p4_stations.html p5_kbd.html p6_game.html p6b_native.html p7_result.html > ../index.html
 mkdir -p ../docs
 {
   cat <<'HEAD'
@@ -30,7 +30,7 @@ HEAD
   cat p1_style.html p2_style.html
   echo '</head>'
   echo '<body>'
-  cat p3_markup.html p4_stations.html p5_kbd.html p6_game.html p7_result.html
+  cat p3_markup.html p4_stations.html p5_kbd.html p6_game.html p6b_native.html p7_result.html
   echo '</body>'
   echo '</html>'
 } > ../docs/index.html

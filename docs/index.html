@@ -117,7 +117,11 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
 </style>
 <style>
 /* ---------- ゲーム画面 ---------- */
-#screen-game{touch-action:none}
+#screen-game{touch-action:none;position:relative}
+/* スマホ・PCのキーボードで打つとき：画面のキーは隠し、見えない入力欄に打つ（16px 未満だと iPhone が拡大する） */
+#app.native .kbd{display:none}
+.native-in{position:absolute;left:0;top:0;width:100%;height:44px;opacity:0;pointer-events:none;font-size:16px;color:transparent;caret-color:transparent;background:transparent;border:0;padding:0}
+.tap-type{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;border:none;border-radius:999px;padding:12px 20px;font-weight:900;font-size:15px;background:var(--fg);color:var(--bg);box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;white-space:nowrap}
 .hud{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding-inline:12px;padding-block:8px 6px}
 .hud-time{font-variant-numeric:tabular-nums;font-weight:900;font-size:22px;line-height:1;min-width:4.2em}
 .hud-time small{font-size:11px;font-weight:700;color:var(--muted);margin-left:2px}
@@ -153,6 +157,7 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
 .reading .done{color:var(--led);text-shadow:0 0 5px rgba(255,163,26,.5)}
 .reading .pend{color:#0c0d0e;background:var(--led);border-radius:1px}
 .reading .rest{color:var(--led-rest)}
+.reading .bad{color:#0c0d0e;background:var(--led-red);border-radius:1px}
 .reading .cur{color:#fff4dc;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:2px}
 .board.miss{animation:boardMiss .22s,boardFlash .35s}
 @keyframes boardMiss{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
@@ -236,6 +241,7 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
 .btn{border:none;border-radius:10px;padding:13px 10px;font-weight:900;font-size:15px;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-soft)}
 .btn.primary{background:var(--line);color:#fff;box-shadow:none}
 .btn.share{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--x-bg);color:var(--x-fg);box-shadow:none;text-decoration:none;text-align:center}
+.share-note{margin:-6px 0 0;font-size:12px;color:var(--muted);text-align:center}
 .btn.share svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
 .btn:focus-visible{outline:3px solid var(--pop-hit);outline-offset:2px}
 @keyframes toastFade{0%,80%{opacity:1}100%{opacity:0}}
@@ -256,6 +262,7 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
   .hud{grid-column:1;grid-row:1}.board{grid-column:1;grid-row:2}.scene{grid-column:1;grid-row:3}
   .kbd{grid-column:2;grid-row:1/4;grid-template-rows:repeat(4,minmax(0,1fr));padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
   .key{height:auto}
+  #app.native #screen-game{grid-template-columns:minmax(0,1fr)}   /* キーボード入力のときは右の列を使わない */
 }
 </style>
 </head>
@@ -277,6 +284,12 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
   <div class="section-label">地方をえらぶ</div>
   <div class="regions" id="regions" role="group" aria-label="地方"></div>
 
+  <div class="section-label">入力方法</div>
+  <div class="regions" id="input-mode" role="group" aria-label="入力方法">
+    <button type="button" class="chip" data-input="native" aria-pressed="true">スマホ・PCのキーボード</button>
+    <button type="button" class="chip" data-input="screen" aria-pressed="false">画面のフリックキー</button>
+  </div>
+
   <div class="section-label">1日乗車券をえらぶ</div>
   <div class="tickets" id="tickets"></div>
 
@@ -286,14 +299,16 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
   </div>
 
   <div class="howto">
-    フリック：キーを押したまま 左・上・右・下 に払うと い・う・え・お の段。<br>
-    濁点・半濁点・小さい字は、元の字を打ってから <kbd>小゛゜</kbd> キー（タップで切り替え、左払い＝゛ 上払い＝小 右払い＝゜）。<br>
-    「ー」は <kbd>わ</kbd> キーを右に払う。ミスなく打ち切ると残り時間 +1秒。
+    <b>スマホ・PCのキーボード</b>：日本語（かな）キーボードで、変換せずに ひらがな のまま打つ。フリックでもトグルでもOK。PCは英数のままローマ字で打てる（日本語入力をオンにするなら変換しないで）。<br>
+    <b>画面のフリックキー</b>：キーを押したまま 左・上・右・下 に払うと い・う・え・お の段。濁点・小さい字は元の字を打ってから <kbd>小゛゜</kbd> キー（タップで切り替え、左＝゛ 上＝小 右＝゜）。「ー」は <kbd>わ</kbd> キーを右に払う。<br>
+    ミスなく打ち切ると残り時間 +1秒。
   </div>
   <p class="credit">駅データ：<a href="https://github.com/TrainLCD/StationAPI" target="_blank" rel="noopener">TrainLCD/StationAPI</a>（MIT License, Copyright (c) 2019 TinyKitten）をもとに、読みを Wikidata・Wikipedia・各社の駅案内と照合して修正。2026年10月時点の営業中の駅。</p>
 </section>
 
 <section id="screen-game" class="screen" aria-label="ゲーム" hidden>
+  <input id="native-in" class="native-in" type="text" lang="ja" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="駅名のよみを入力">
+  <input id="native-in2" class="native-in" type="text" lang="ja" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="駅名のよみを入力" tabindex="-1">
   <div class="hud">
     <div class="hud-time" id="hud-time">60.0<small>秒</small></div>
     <div class="hud-fare">
@@ -327,6 +342,7 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
     <div class="platform"></div>
     <div class="combo" id="combo" hidden>連続 <b id="combo-n">0</b></div>
     <div class="toast" id="toast"></div>
+    <button type="button" class="tap-type" id="tap-type" hidden>タップしてキーボードを出す</button>
   </div>
 
   <div class="kbd" id="kbd" role="group" aria-label="フリックキーボード"></div>
@@ -334,10 +350,11 @@ button:focus-visible,.key:focus-visible{outline:3px solid var(--pop-hit);outline
 
 <section id="screen-result" class="screen" aria-label="結果" hidden>
   <div class="receipt" id="receipt"></div>
-  <a class="btn share" id="btn-share" href="https://x.com/intent/post" target="_blank" rel="noopener">
+  <a class="btn share" id="btn-share" href="https://x.com/intent/tweet" target="_blank" rel="noopener">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5L9 13 0 1.2h7.6l5.2 6.9 6.1-6.9zm-1.3 19.4h2L6.5 3.3H4.3l13.3 17.3z"/></svg>
     結果を X でシェア
   </a>
+  <p class="share-note" id="share-note" hidden>文面もコピーしました。投稿画面が空のときは貼り付けてください。</p>
   <div class="btn-row">
     <button type="button" class="btn" id="btn-menu">コースをえらぶ</button>
     <button type="button" class="btn primary" id="btn-again">もう一度</button>
@@ -497,7 +514,8 @@ const store = {
   },
   set(k, v) { this.mem[k] = v; try { localStorage.setItem("flickExpress." + k, JSON.stringify(v)); } catch (_) {} },
 };
-const opts = { guide: store.get("guide", true), sound: store.get("sound", true) };
+const opts = { guide: store.get("guide", true), sound: store.get("sound", true), input: store.get("input", "native") };
+if (opts.input !== "screen") opts.input = "native";
 Sfx.on = opts.sound;
 
 const $ = id => document.getElementById(id);
@@ -514,7 +532,8 @@ function poolOf(courseId, regionId) {
   const c = COURSES[courseId], r = REGIONS.find(x => x.id === regionId);
   return STATIONS.filter(s => (!r.p || r.p.includes(s[2])) && lenOf(s) >= c.min && lenOf(s) <= c.max);
 }
-const bestKey = (courseId, regionId) => courseId + ":" + regionId;
+// 自己ベストは入力方法ごと（画面のキーは従来どおりの鍵、スマホ・PCのキーボードは末尾に :k）
+const bestKey = (courseId, regionId, mode = opts.input) => courseId + ":" + regionId + (mode === "native" ? ":k" : "");
 function renderRegions() {
   $("regions").innerHTML = REGIONS.map(r =>
     `<button type="button" class="chip" data-region="${r.id}" aria-pressed="${r.id === region}">${r.name}</button>`).join("");
@@ -559,7 +578,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 function startGame(courseId) {
   stopLoop();
   const c = COURSES[courseId];
-  G = { c, region, deck: shuffle(poolOf(courseId, region)), deckPos: 0, phase: "ready", cur: null, pending: null,
+  G = { c, region, mode: opts.input, deck: shuffle(poolOf(courseId, region)), deckPos: 0, phase: "ready", cur: null, pending: null,
         fare: 0, keys: 0, miss: 0, combo: 0, maxCombo: 0, bonus: 0, rides: [], endAt: 0, startAt: 0, no: 0, gen: ++GEN };
   document.documentElement.style.setProperty("--line", c.color);
   $("hud-price").textContent = yen(c.price);
@@ -570,6 +589,7 @@ function startGame(courseId) {
   trainEl.getAnimations().forEach(a => a.cancel()); trainEl.style.transform = "translateX(100%)";
   updateHud(c.time * 1000);
   show("game");
+  if (isNative()) nativeStart();             // タップの流れのまま入力欄にフォーカスしてキーボードを出す
   try { navigator.wakeLock?.request("screen").then(l => wakeLock = l).catch(() => {}); } catch (_) {}
   // 発車メロディ → 3, 2, 1
   const gen = G.gen, msg = $("b-msg");
@@ -595,6 +615,8 @@ function nextTrain() {
   G.cur = { disp, pref, line, read: [...read], i: 0, miss: 0, fare: fareOf([...read].length), dwellEnd: performance.now() + arriveMs + dwell, dwell, arriveMs };
   $("b-line").textContent = line; $("b-pref").textContent = PREFS[pref - 1];
   G.pending = null; G.no++; G.phase = "play";
+  G.nat = { k: 0, rest: [], state: "ok" };
+  if (isNative()) nativeConsume();
   fitText($("b-dest"), disp, 34, "--dest-size");
   fitText($("b-read"), read, 22, "--read-size", 1.03);
   renderReading(); updateGuide();
@@ -603,7 +625,7 @@ function nextTrain() {
 }
 
 function fitText(el, text, max, prop, spacing = 1) {   // spacing：字間を含めた1字の幅（em）
-  if (innerHeight < 560) max = Math.round(max * .72);   // 背の低い画面では発車標を詰める
+  if ((window.visualViewport?.height || innerHeight) < 560) max = Math.round(max * .72);   // 背の低い画面（キーボード表示中も）では発車標を詰める
   const w = boardEl.clientWidth - 24;
   const n = [...text].length || 1;
   let size = Math.min(max, Math.floor(w / (n * spacing))), two = false;
@@ -617,12 +639,17 @@ function renderReading() {
   const { read, i } = G.cur, esc = s => s.replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
   const done = esc(read.slice(0, i).join(""));
   const rest = esc(read.slice(i + 1).join(""));
-  const now = i < read.length ? (G.pending ? `<span class="pend">${G.pending}</span>` : `<span class="cur">${esc(read[i])}</span>`) : "";
+  let now = i < read.length ? (G.pending ? `<span class="pend">${G.pending}</span>` : `<span class="cur">${esc(read[i])}</span>`) : "";
+  if (G.mode === "native" && G.nat && i < read.length) {   // 打ちかけ（ローマ字・トグルの途中）と打ち間違いも見せる
+    const extra = esc(G.nat.rest.join(""));
+    if (G.nat.state === "pend") now = `<span class="pend">${extra}</span>`;
+    else if (G.nat.state === "bad" || G.nat.state === "kanji") now = `<span class="bad">${extra}</span><span class="cur">${esc(read[i])}</span>`;
+  }
   $("b-read").innerHTML = `<span class="done">${done}</span>${now}<span class="rest">${rest}</span>`;
 }
 
 function updateGuide() {
-  if (!opts.guide || !G?.cur || G.phase !== "play") { setHint(null); return; }
+  if (!opts.guide || isNative() || !G?.cur || G.phase !== "play") { setHint(null); return; }
   const t = G.cur.read[G.cur.i];
   if (t == null) { setHint(null); return; }
   if (G.pending) { setHint("mod", {daku: 1, small: 2, handaku: 3}[VTYPE[t]] || 0); return; }
@@ -679,6 +706,7 @@ function missedTrain() {
 
 function depart() {
   G.phase = "depart"; G.pending = null; setHint(null);
+  if (G.mode === "native") nativeConsume();
   $("combo").hidden = G.combo < 2; $("combo-n").textContent = G.combo;
   updateHud(G.endAt - performance.now());
   const gen = G.gen;
@@ -721,6 +749,7 @@ function stopLoop() { cancelAnimationFrame(raf); raf = 0; }
 
 function finish() {
   stopLoop(); G.phase = "over"; setHint(null);
+  if (G.mode === "native") nativeStop();
   updateHud(0); Sfx.end();
   const msg = $("b-msg"); msg.hidden = false; msg.innerHTML = "本日の運転は<br>終了しました";
   const gen = G.gen;
@@ -730,6 +759,7 @@ function finish() {
 
 function quit() {
   GEN++; G = null; stopLoop(); setHint(null); popEl.hidden = true;
+  nativeStop();
   try { wakeLock?.release(); } catch (_) {} wakeLock = null;
   renderTickets(); show("title");
 }
@@ -738,8 +768,258 @@ $("btn-menu").addEventListener("click", quit);
 $("btn-again").addEventListener("click", () => { Sfx.unlock(); startGame(G ? G.c.id : "kaku"); });
 </script>
 <script>
+// ---- スマホ・PCのキーボードで打つ ----
+// 見えない入力欄に打ってもらい、日本語入力の「変換前のひらがな」か、英数のローマ字を読んで判定する。
+// 1駅打つごとにもう一方の入力欄へフォーカスを移す。変換中の欄の中身を書き換えると
+// iPhone の日本語入力が固まる（WebKit の不具合）ので、変換中の欄には触らない。
+const fields = [$("native-in"), $("native-in2")];
+const appEl = $("app"), tapType = $("tap-type");
+const NI = { fi: 0, composing: false, consumed: "", len: 0, state: "ok", restKana: false, sawAscii: false,
+             kanjiWarned: false, swapping: false, kbSeen: false };
+const isNative = () => opts.input === "native";
+const field = () => fields[NI.fi];
+const keyOf = ch => KEYPOS[BASE[ch] || ch]?.id;
+const isRoma = c => /[a-z'\-]/.test(c);
+const normIn = v => v.normalize("NFKC")
+  .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+  .replace(/\s/g, "").toLowerCase();
+
+// ---- ローマ字（日本語入力オフの英数で打つとき） ----
+// 目標のよみに合わせて、打てる綴りを全部ためす（寿司打と同じ考え方）
+const ROMA1 = {};
+("あ:a い:i,yi う:u,wu,whu え:e お:o か:ka,ca き:ki く:ku,cu,qu け:ke こ:ko,co さ:sa し:si,shi,ci す:su せ:se,ce そ:so "
+ + "た:ta ち:ti,chi つ:tu,tsu て:te と:to な:na に:ni ぬ:nu ね:ne の:no は:ha ひ:hi ふ:hu,fu へ:he ほ:ho "
+ + "ま:ma み:mi む:mu め:me も:mo や:ya ゆ:yu よ:yo ら:ra り:ri る:ru れ:re ろ:ro わ:wa を:wo "
+ + "が:ga ぎ:gi ぐ:gu げ:ge ご:go ざ:za じ:zi,ji ず:zu ぜ:ze ぞ:zo だ:da ぢ:di づ:du で:de ど:do "
+ + "ば:ba び:bi ぶ:bu べ:be ぼ:bo ぱ:pa ぴ:pi ぷ:pu ぺ:pe ぽ:po ゔ:vu "
+ + "ぁ:xa,la ぃ:xi,li,xyi,lyi ぅ:xu,lu ぇ:xe,le,xye,lye ぉ:xo,lo ゃ:xya,lya ゅ:xyu,lyu ょ:xyo,lyo "
+ + "っ:xtu,ltu,xtsu,ltsu ゎ:xwa,lwa ー:-")
+  .split(" ").forEach(p => { const [k, v] = p.split(":"); ROMA1[k] = v.split(","); });
+const ROMA2 = {};   // 拗音など2字ひと組の綴り
+(() => {
+  const yo = { "ゃ": "a", "ぃ": "i", "ゅ": "u", "ぇ": "e", "ょ": "o" };
+  const rows = { き: ["ky"], し: ["sy", "sh"], ち: ["ty", "ch", "cy"], に: ["ny"], ひ: ["hy"], み: ["my"], り: ["ry"],
+                 ぎ: ["gy"], じ: ["zy", "j", "jy"], ぢ: ["dy"], び: ["by"], ぴ: ["py"] };
+  for (const [k, heads] of Object.entries(rows)) for (const [s, v] of Object.entries(yo)) ROMA2[k + s] = heads.map(h => h + v);
+  Object.assign(ROMA2, {
+    ふぁ: ["fa"], ふぃ: ["fi", "fyi"], ふぇ: ["fe", "fye"], ふぉ: ["fo"], ふゅ: ["fyu"],
+    てぃ: ["thi"], てゅ: ["thu"], でぃ: ["dhi"], でゅ: ["dhu"], とぅ: ["twu"], どぅ: ["dwu"],
+    うぃ: ["wi", "whi"], うぇ: ["we", "whe"], うぉ: ["who"], いぇ: ["ye"],
+    ゔぁ: ["va"], ゔぃ: ["vi"], ゔぇ: ["ve"], ゔぉ: ["vo"], ゔゅ: ["vyu"],
+    つぁ: ["tsa"], つぃ: ["tsi"], つぇ: ["tse"], つぉ: ["tso"],
+    くぁ: ["qa", "kwa"], くぃ: ["qi"], くぇ: ["qe"], くぉ: ["qo"], ぐぁ: ["gwa"],
+  });
+})();
+// t[j] から始まる「ひと組」と、その綴りの候補
+function romaUnits(t, j) {
+  const out = [], a = t[j], b = t[j + 1];
+  if (b && ROMA2[a + b]) out.push({ len: 2, spells: ROMA2[a + b] });
+  if (a === "ん") {
+    const strict = b && "あいうえおやゆよなにぬねのん".includes(b);   // 次が母音・や行・な行なら n 1つでは足りない
+    out.push({ len: 1, spells: strict ? ["nn", "n'", "xn"] : ["n", "nn", "n'", "xn"] });
+  } else if (a === "っ" && b && b !== "っ" && b !== "ん") {
+    for (const u of romaUnits(t, j + 1)) {
+      const sp = new Set();
+      for (const s of u.spells) {
+        if (/^[bcdfghjklmpqrstvwxyz]/.test(s)) sp.add(s[0] + s);
+        if (s.startsWith("ch")) sp.add("t" + s);                 // tchi
+      }
+      if (sp.size) out.push({ len: 1 + u.len, spells: [...sp] });
+    }
+  }
+  if (ROMA1[a]) out.push({ len: 1, spells: ROMA1[a] });
+  return out;
+}
+const RANK = { ok: 3, pend: 2, bad: 0 };
+// 目標のよみ t の j 字目から、ローマ字 a の p 文字目以降がどこまで合うか
+function romaMatch(t, j, a, p) {
+  if (p >= a.length) return { k: j, rest: "", state: "ok" };
+  if (j >= t.length) return { k: j, rest: a.slice(p), state: "ok", over: true };
+  let best = null;
+  const take = r => { if (!best || RANK[r.state] > RANK[best.state] || (RANK[r.state] === RANK[best.state] && r.k > best.k)) best = r; };
+  const tail = a.slice(p);
+  for (const u of romaUnits(t, j)) for (const s of u.spells) {
+    if (a.startsWith(s, p)) take(romaMatch(t, j + u.len, a, p + s.length));
+    else if (s.startsWith(tail)) take({ k: j, rest: tail, state: "pend" });
+  }
+  return best || { k: j, rest: tail, state: "bad" };
+}
+
+// 打った字 s を目標のよみ t と照らし合わせる
+function evalTyped(s, t) {
+  const ch = [...s];
+  let j = 0, i = 0;
+  while (i < ch.length) {
+    if (isRoma(ch[i])) {
+      let run = "";
+      while (i < ch.length && isRoma(ch[i])) run += ch[i++];
+      const r = romaMatch(t, j, run, 0);
+      j = r.k;
+      if (r.state === "ok" && !r.over) continue;
+      if (r.over) return { k: j, rest: [...r.rest, ...ch.slice(i)], state: i < ch.length ? "bad" : "ok", len: ch.length };
+      if (r.state === "pend" && i >= ch.length) return { k: j, rest: [...r.rest], state: "pend", len: ch.length };
+      return { k: j, rest: [...r.rest, ...ch.slice(i)], state: "bad", len: ch.length };
+    }
+    if (j < t.length && ch[i] === t[j]) { j++; i++; continue; }
+    const rest = ch.slice(i);
+    if (rest.some(c => /\p{Script=Han}/u.test(c))) return { k: j, rest, state: "kanji", len: ch.length };
+    // フリック・トグル入力の途中（あ→い→う、ふ→ぶ）。ローマ字で打っているときは途中の字にならないので使わない
+    if (j < t.length && !NI.sawAscii && rest.length === 1 && keyOf(rest[0]) && keyOf(rest[0]) === keyOf(t[j]))
+      return { k: j, rest, state: "pend", len: ch.length };
+    return { k: j, rest, state: "bad", len: ch.length };
+  }
+  return { k: j, rest: [], state: "ok", len: ch.length };
+}
+
+function nativeFocus() {
+  if (!isNative()) return;
+  try { field().focus({ preventScroll: true }); } catch (_) { field().focus(); }
+}
+function resetJudge() {
+  NI.len = 0; NI.state = "ok"; NI.restKana = false; NI.sawAscii = false; NI.kanjiWarned = false;
+  if (G) G.nat = { k: 0, rest: [], state: "ok" };
+}
+// 次の駅に向けて入力欄を空にする。中身があればもう一方の欄に移り、古い欄は確定された後で空にする
+function nativeConsume() {
+  resetJudge();
+  const old = field();
+  if (!old.value && !NI.composing) { NI.consumed = ""; return; }
+  const next = fields[1 - NI.fi];
+  next.value = "";
+  NI.swapping = true;
+  try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); }
+  NI.swapping = false;
+  if (document.activeElement === next) {
+    NI.fi = 1 - NI.fi; NI.consumed = ""; NI.composing = false;
+    setTimeout(() => { if (document.activeElement !== old) old.value = ""; }, 0);
+  } else {
+    // フォーカスを移せなかったときは同じ欄で続ける。変換中なら書き換えず、古い字は読み飛ばす
+    if (document.activeElement !== old) nativeFocus();
+    NI.consumed = normIn(old.value);
+    if (!NI.composing) { old.value = ""; NI.consumed = ""; }
+  }
+}
+
+function nativeInput(e) {
+  if (e && e.target !== field()) return;                       // 切り替える前の欄で確定された字は見ない
+  if (e && /^delete(Composition|ByComposition)/.test(e.inputType || "")) return;   // 確定の途中の一瞬だけ空になる知らせ
+  const v = normIn(field().value);
+  if (!isNative() || !G || G.phase !== "play" || !G.cur) { if (v || !NI.composing) NI.consumed = v; return; }
+  const t = G.cur.read;
+  // 読み済みの字（フォーカスを移せなかったときだけ使う）を除いた見方を優先し、それだと打ち間違いになるときだけ全体で見直す
+  let s = v;
+  if (NI.consumed && v.startsWith(NI.consumed)) {
+    const stripped = v.slice(NI.consumed.length);
+    if (evalTyped(stripped, t).state !== "bad" || evalTyped(v, t).state === "bad") s = stripped; else NI.consumed = "";
+  } else NI.consumed = "";
+  if (/[a-z]/.test(s)) NI.sawAscii = true;
+  const r = evalTyped(s, t), { k, rest, state } = r;
+  if (k > (G.cur.maxK || 0)) { G.keys += k - (G.cur.maxK || 0); G.cur.maxK = k; }
+  if (k >= t.length && state === "ok") {                       // 打ち切った（余りがローマ字だけなら乗車）
+    G.nat = { k, rest: [], state: "ok" };
+    G.cur.i = t.length; renderReading();
+    boarded();
+    return;
+  }
+  // ミスの数え方：打ち間違いになったとき・打ち間違いのまま字が増えたとき・途中の字を消したとき
+  if (state === "bad" && (NI.state !== "bad" || r.len > NI.len)) miss();
+  else if (NI.state === "pend" && NI.restKana && state === "ok" && r.len < NI.len) miss();
+  if (state === "kanji" && !NI.kanjiWarned) { NI.kanjiWarned = true; toast("変換しないで打ってね", "bad"); }
+  NI.state = state; NI.len = r.len; NI.restKana = state === "pend" && !rest.every(isRoma);
+  G.nat = { k, rest, state };
+  G.cur.i = Math.min(k, t.length - 1);
+  renderReading();
+}
+
+// 入力欄からフォーカスが外れたら「タップしてキーボードを出す」を出す。ゲーム画面のどこを触っても入力欄に戻す
+const inGame = () => G && (G.phase === "ready" || G.phase === "play" || G.phase === "depart");
+const isTouch = matchMedia("(pointer: coarse)").matches;
+const layoutH = () => document.documentElement.clientHeight || innerHeight;
+const keyboardUp = () => window.visualViewport ? visualViewport.height < layoutH() - 100 : true;
+function checkKeyboard() {
+  if (!isNative() || !inGame()) { tapType.hidden = true; return; }
+  const focused = fields.includes(document.activeElement);
+  // Android の「戻る」はフォーカスを残したままキーボードだけ閉じるので、見えている高さでも判定する
+  tapType.hidden = focused && !(isTouch && NI.kbSeen && !keyboardUp());
+}
+
+for (const f of fields) {
+  f.addEventListener("input", nativeInput);
+  f.addEventListener("compositionstart", e => { if (e.target === field()) NI.composing = true; });
+  f.addEventListener("compositionend", e => {
+    if (e.target !== field()) return;
+    NI.composing = false;
+    nativeInput();
+    // 確定し終わって全部読み済みなら、ここで安全に空にできる
+    if (NI.consumed && normIn(field().value) === NI.consumed) { field().value = ""; NI.consumed = ""; }
+  });
+  f.addEventListener("keydown", e => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === "Enter" || e.key === "Tab") e.preventDefault();
+  });
+  f.addEventListener("blur", () => { if (!NI.swapping && isNative() && inGame()) setTimeout(checkKeyboard, 60); });
+  f.addEventListener("focus", () => { tapType.hidden = true; fitViewport(); });
+}
+
+$("screen-game").addEventListener("pointerdown", e => {
+  if (!isNative() || e.target.closest(".hud-btns")) return;
+  e.preventDefault();                        // 触ってもキーボードが閉じないように
+});
+$("screen-game").addEventListener("click", e => {
+  if (!isNative() || !inGame() || e.target.closest(".hud-btns")) return;
+  const focused = fields.includes(document.activeElement);
+  if (focused && !tapType.hidden) field().blur();   // キーボードだけ閉じている → 付け直して出し直す
+  if (!focused || !tapType.hidden) nativeFocus();
+  setTimeout(checkKeyboard, 300);
+});
+// 効果音ボタンを押してもキーボードを閉じない
+$("btn-sound").addEventListener("pointerdown", e => { if (isNative() && inGame()) e.preventDefault(); });
+$("btn-sound").addEventListener("click", () => { if (isNative() && inGame()) nativeFocus(); });
+
+// キーボードが出ている間は、見えている範囲にゲーム画面を収める
+function fitViewport() {
+  const vv = window.visualViewport;
+  if (!vv || !isNative() || screens.game.hidden) { appEl.style.height = ""; return; }
+  if (keyboardUp()) {
+    NI.kbSeen = true;
+    const top = appEl.getBoundingClientRect().top + window.scrollY;
+    appEl.style.height = Math.max(240, vv.height - top) + "px";
+    if (window.scrollY) window.scrollTo(0, 0);
+  } else appEl.style.height = "";
+  checkKeyboard();
+}
+window.visualViewport?.addEventListener("resize", fitViewport);
+window.visualViewport?.addEventListener("scroll", fitViewport);
+
+function nativeStart() {                     // チケットを押した流れのまま呼ぶ（キーボードを出すため）
+  for (const f of fields) f.value = "";
+  NI.fi = 0; NI.consumed = ""; NI.composing = false; NI.kbSeen = false; resetJudge();
+  tapType.hidden = true;
+  nativeFocus(); fitViewport();
+}
+function nativeStop() {
+  for (const f of fields) f.blur();
+  tapType.hidden = true; appEl.style.height = "";
+}
+
+function applyInputMode() {
+  appEl.classList.toggle("native", isNative());
+  document.querySelectorAll("#input-mode .chip").forEach(b => b.setAttribute("aria-pressed", b.dataset.input === opts.input));
+}
+$("input-mode").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  opts.input = b.dataset.input; store.set("input", opts.input); applyInputMode(); renderTickets();
+});
+applyInputMode();
+</script>
+<script>
 // ---- 結果（ご乗車記録） ----
 const SHARE_URL = "https://uhouho628.github.io/flick-express/";
+let shareText = "";
+// 念のため文面をクリップボードにも入れておく（投稿画面が空で開いたときに貼り付けられるように）
+$("btn-share").addEventListener("click", () => {
+  try { navigator.clipboard?.writeText(shareText).then(() => { $("share-note").hidden = false; }).catch(() => {}); } catch (_) {}
+});
 function rankText(r, id) {
   if (r >= 2)   return "乗り放題を使い倒しました。乗り鉄の鑑です";
   if (r >= 1.5) return "かなりおトク。指先が特急並みです";
@@ -754,7 +1034,8 @@ function showResult() {
   const kps = G.keys / playSec;
   const acc = G.keys + G.miss ? G.keys / (G.keys + G.miss) * 100 : 0;
   const okN = G.rides.filter(r => r.ok).length, lateN = G.rides.length - okN;
-  const best = store.get("best", {}), bk = bestKey(c.id, G.region);
+  const best = store.get("best", {}), bk = bestKey(c.id, G.region, G.mode);
+  const unit = G.mode === "native" ? "字" : "回";
   const isBest = best[bk] == null || G.fare > best[bk];
   if (isBest) { best[bk] = G.fare; store.set("best", best); }
   const prefN = new Set(G.rides.filter(r => r.ok).map(r => r.pref)).size;
@@ -768,18 +1049,24 @@ function showResult() {
       <dt>乗った電車の運賃</dt><dd>${yen(G.fare)}</dd>
       <dt>乗車 / 乗り遅れ</dt><dd>${okN}本 / ${lateN}本</dd>
       <dt>乗った駅の都道府県</dt><dd>${prefN}</dd>
-      <dt class="sum">正しく打ったキー</dt><dd class="sum">${G.keys}回</dd>
+      <dt class="sum">${G.mode === "native" ? "正しく打った字" : "正しく打ったキー"}</dt><dd class="sum">${G.keys}${unit}</dd>
       <dt>ミス</dt><dd>${G.miss}回（正確さ ${acc.toFixed(1)}%）</dd>
-      <dt>平均キータイプ</dt><dd>${kps.toFixed(2)}回/秒</dd>
+      <dt>平均${G.mode === "native" ? "の速さ" : "キータイプ"}</dt><dd>${kps.toFixed(2)}${unit}/秒</dd>
       <dt>最大連続ノーミス</dt><dd>${G.maxCombo}本</dd>
       <dt>ボーナス時間</dt><dd>+${G.bonus}秒</dd>
     </dl>
     <div class="r-rank">${isBest ? '<span class="r-best">自己ベスト更新</span>　' : ""}このコースの自己ベスト ${yen(best[bk])}</div>`;
-  // X（旧Twitter）の投稿画面を開くリンク。claude.ai 版から押しても公開中の GitHub 版を案内する
-  const head = diff > 0 ? yen(diff) + " おトク" : diff === 0 ? "ぴったり元が取れた" : yen(-diff) + " 損";
-  const text = `フリック特急【${rname}・${c.label}】で ${head}！${isBest ? "（自己ベスト更新）" : ""}\n`
-    + `${okN}本に乗車・${prefN}都道府県／正確さ ${acc.toFixed(1)}%・${kps.toFixed(2)}回/秒\n#フリック特急`;
-  $("btn-share").href = "https://x.com/intent/post?" + new URLSearchParams({ text, url: SHARE_URL });
+  // X（旧Twitter）の投稿画面を開くリンク（公式の web intent）。本文の最後の行に GitHub 版の URL を入れる
+  const jpy = n => n.toLocaleString("ja-JP") + "円";
+  const head = diff > 0 ? `${jpy(diff)}得になりました！` : diff === 0 ? "ぴったり元が取れました！" : `${jpy(-diff)}損になりました…`;
+  shareText = [
+    `フリック特急（${rname}・${c.label}）で${head}${isBest ? "（自己ベスト更新）" : ""}`,
+    `${okN}本に乗車・${prefN}都道府県／正確さ${acc.toFixed(1)}%・${kps.toFixed(2)}${unit}/秒`,
+    "#フリック特急",
+    SHARE_URL,
+  ].join("\n");
+  $("btn-share").href = "https://x.com/intent/tweet?text=" + encodeURIComponent(shareText);
+  $("share-note").hidden = true;
   $("history").innerHTML = G.rides.length ? `<h3>乗車履歴</h3><ol>${G.rides.map((r, i) => `
     <li class="${r.ok ? "" : "miss"}"><span>${i + 1}</span><span>${r.disp}<small>${PREFS[r.pref - 1]}</small></span><span>${r.ok ? yen(r.fare) : "乗り遅れ"}</span></li>`).join("")}</ol>` : "";
   show("result");
@@ -790,7 +1077,7 @@ syncSoundIcon();
 renderRegions();
 renderTickets();
 show("title");
-addEventListener("keydown", e => { if (e.key === "Escape" && G) quit(); });
+addEventListener("keydown", e => { if (e.key === "Escape" && G && G.mode !== "native" && !e.isComposing) quit(); });
 addEventListener("resize", () => { if (G?.cur) { fitText($("b-dest"), G.cur.disp, 34, "--dest-size"); fitText($("b-read"), G.cur.read.join(""), 22, "--read-size", 1.03); renderReading(); } });
 </script>
 </body>

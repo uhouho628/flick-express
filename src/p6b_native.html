@@ -1,0 +1,245 @@
+<script>
+// ---- スマホ・PCのキーボードで打つ ----
+// 見えない入力欄に打ってもらい、日本語入力の「変換前のひらがな」か、英数のローマ字を読んで判定する。
+// 1駅打つごとにもう一方の入力欄へフォーカスを移す。変換中の欄の中身を書き換えると
+// iPhone の日本語入力が固まる（WebKit の不具合）ので、変換中の欄には触らない。
+const fields = [$("native-in"), $("native-in2")];
+const appEl = $("app"), tapType = $("tap-type");
+const NI = { fi: 0, composing: false, consumed: "", len: 0, state: "ok", restKana: false, sawAscii: false,
+             kanjiWarned: false, swapping: false, kbSeen: false };
+const isNative = () => opts.input === "native";
+const field = () => fields[NI.fi];
+const keyOf = ch => KEYPOS[BASE[ch] || ch]?.id;
+const isRoma = c => /[a-z'\-]/.test(c);
+const normIn = v => v.normalize("NFKC")
+  .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+  .replace(/\s/g, "").toLowerCase();
+
+// ---- ローマ字（日本語入力オフの英数で打つとき） ----
+// 目標のよみに合わせて、打てる綴りを全部ためす（寿司打と同じ考え方）
+const ROMA1 = {};
+("あ:a い:i,yi う:u,wu,whu え:e お:o か:ka,ca き:ki く:ku,cu,qu け:ke こ:ko,co さ:sa し:si,shi,ci す:su せ:se,ce そ:so "
+ + "た:ta ち:ti,chi つ:tu,tsu て:te と:to な:na に:ni ぬ:nu ね:ne の:no は:ha ひ:hi ふ:hu,fu へ:he ほ:ho "
+ + "ま:ma み:mi む:mu め:me も:mo や:ya ゆ:yu よ:yo ら:ra り:ri る:ru れ:re ろ:ro わ:wa を:wo "
+ + "が:ga ぎ:gi ぐ:gu げ:ge ご:go ざ:za じ:zi,ji ず:zu ぜ:ze ぞ:zo だ:da ぢ:di づ:du で:de ど:do "
+ + "ば:ba び:bi ぶ:bu べ:be ぼ:bo ぱ:pa ぴ:pi ぷ:pu ぺ:pe ぽ:po ゔ:vu "
+ + "ぁ:xa,la ぃ:xi,li,xyi,lyi ぅ:xu,lu ぇ:xe,le,xye,lye ぉ:xo,lo ゃ:xya,lya ゅ:xyu,lyu ょ:xyo,lyo "
+ + "っ:xtu,ltu,xtsu,ltsu ゎ:xwa,lwa ー:-")
+  .split(" ").forEach(p => { const [k, v] = p.split(":"); ROMA1[k] = v.split(","); });
+const ROMA2 = {};   // 拗音など2字ひと組の綴り
+(() => {
+  const yo = { "ゃ": "a", "ぃ": "i", "ゅ": "u", "ぇ": "e", "ょ": "o" };
+  const rows = { き: ["ky"], し: ["sy", "sh"], ち: ["ty", "ch", "cy"], に: ["ny"], ひ: ["hy"], み: ["my"], り: ["ry"],
+                 ぎ: ["gy"], じ: ["zy", "j", "jy"], ぢ: ["dy"], び: ["by"], ぴ: ["py"] };
+  for (const [k, heads] of Object.entries(rows)) for (const [s, v] of Object.entries(yo)) ROMA2[k + s] = heads.map(h => h + v);
+  Object.assign(ROMA2, {
+    ふぁ: ["fa"], ふぃ: ["fi", "fyi"], ふぇ: ["fe", "fye"], ふぉ: ["fo"], ふゅ: ["fyu"],
+    てぃ: ["thi"], てゅ: ["thu"], でぃ: ["dhi"], でゅ: ["dhu"], とぅ: ["twu"], どぅ: ["dwu"],
+    うぃ: ["wi", "whi"], うぇ: ["we", "whe"], うぉ: ["who"], いぇ: ["ye"],
+    ゔぁ: ["va"], ゔぃ: ["vi"], ゔぇ: ["ve"], ゔぉ: ["vo"], ゔゅ: ["vyu"],
+    つぁ: ["tsa"], つぃ: ["tsi"], つぇ: ["tse"], つぉ: ["tso"],
+    くぁ: ["qa", "kwa"], くぃ: ["qi"], くぇ: ["qe"], くぉ: ["qo"], ぐぁ: ["gwa"],
+  });
+})();
+// t[j] から始まる「ひと組」と、その綴りの候補
+function romaUnits(t, j) {
+  const out = [], a = t[j], b = t[j + 1];
+  if (b && ROMA2[a + b]) out.push({ len: 2, spells: ROMA2[a + b] });
+  if (a === "ん") {
+    const strict = b && "あいうえおやゆよなにぬねのん".includes(b);   // 次が母音・や行・な行なら n 1つでは足りない
+    out.push({ len: 1, spells: strict ? ["nn", "n'", "xn"] : ["n", "nn", "n'", "xn"] });
+  } else if (a === "っ" && b && b !== "っ" && b !== "ん") {
+    for (const u of romaUnits(t, j + 1)) {
+      const sp = new Set();
+      for (const s of u.spells) {
+        if (/^[bcdfghjklmpqrstvwxyz]/.test(s)) sp.add(s[0] + s);
+        if (s.startsWith("ch")) sp.add("t" + s);                 // tchi
+      }
+      if (sp.size) out.push({ len: 1 + u.len, spells: [...sp] });
+    }
+  }
+  if (ROMA1[a]) out.push({ len: 1, spells: ROMA1[a] });
+  return out;
+}
+const RANK = { ok: 3, pend: 2, bad: 0 };
+// 目標のよみ t の j 字目から、ローマ字 a の p 文字目以降がどこまで合うか
+function romaMatch(t, j, a, p) {
+  if (p >= a.length) return { k: j, rest: "", state: "ok" };
+  if (j >= t.length) return { k: j, rest: a.slice(p), state: "ok", over: true };
+  let best = null;
+  const take = r => { if (!best || RANK[r.state] > RANK[best.state] || (RANK[r.state] === RANK[best.state] && r.k > best.k)) best = r; };
+  const tail = a.slice(p);
+  for (const u of romaUnits(t, j)) for (const s of u.spells) {
+    if (a.startsWith(s, p)) take(romaMatch(t, j + u.len, a, p + s.length));
+    else if (s.startsWith(tail)) take({ k: j, rest: tail, state: "pend" });
+  }
+  return best || { k: j, rest: tail, state: "bad" };
+}
+
+// 打った字 s を目標のよみ t と照らし合わせる
+function evalTyped(s, t) {
+  const ch = [...s];
+  let j = 0, i = 0;
+  while (i < ch.length) {
+    if (isRoma(ch[i])) {
+      let run = "";
+      while (i < ch.length && isRoma(ch[i])) run += ch[i++];
+      const r = romaMatch(t, j, run, 0);
+      j = r.k;
+      if (r.state === "ok" && !r.over) continue;
+      if (r.over) return { k: j, rest: [...r.rest, ...ch.slice(i)], state: i < ch.length ? "bad" : "ok", len: ch.length };
+      if (r.state === "pend" && i >= ch.length) return { k: j, rest: [...r.rest], state: "pend", len: ch.length };
+      return { k: j, rest: [...r.rest, ...ch.slice(i)], state: "bad", len: ch.length };
+    }
+    if (j < t.length && ch[i] === t[j]) { j++; i++; continue; }
+    const rest = ch.slice(i);
+    if (rest.some(c => /\p{Script=Han}/u.test(c))) return { k: j, rest, state: "kanji", len: ch.length };
+    // フリック・トグル入力の途中（あ→い→う、ふ→ぶ）。ローマ字で打っているときは途中の字にならないので使わない
+    if (j < t.length && !NI.sawAscii && rest.length === 1 && keyOf(rest[0]) && keyOf(rest[0]) === keyOf(t[j]))
+      return { k: j, rest, state: "pend", len: ch.length };
+    return { k: j, rest, state: "bad", len: ch.length };
+  }
+  return { k: j, rest: [], state: "ok", len: ch.length };
+}
+
+function nativeFocus() {
+  if (!isNative()) return;
+  try { field().focus({ preventScroll: true }); } catch (_) { field().focus(); }
+}
+function resetJudge() {
+  NI.len = 0; NI.state = "ok"; NI.restKana = false; NI.sawAscii = false; NI.kanjiWarned = false;
+  if (G) G.nat = { k: 0, rest: [], state: "ok" };
+}
+// 次の駅に向けて入力欄を空にする。中身があればもう一方の欄に移り、古い欄は確定された後で空にする
+function nativeConsume() {
+  resetJudge();
+  const old = field();
+  if (!old.value && !NI.composing) { NI.consumed = ""; return; }
+  const next = fields[1 - NI.fi];
+  next.value = "";
+  NI.swapping = true;
+  try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); }
+  NI.swapping = false;
+  if (document.activeElement === next) {
+    NI.fi = 1 - NI.fi; NI.consumed = ""; NI.composing = false;
+    setTimeout(() => { if (document.activeElement !== old) old.value = ""; }, 0);
+  } else {
+    // フォーカスを移せなかったときは同じ欄で続ける。変換中なら書き換えず、古い字は読み飛ばす
+    if (document.activeElement !== old) nativeFocus();
+    NI.consumed = normIn(old.value);
+    if (!NI.composing) { old.value = ""; NI.consumed = ""; }
+  }
+}
+
+function nativeInput(e) {
+  if (e && e.target !== field()) return;                       // 切り替える前の欄で確定された字は見ない
+  if (e && /^delete(Composition|ByComposition)/.test(e.inputType || "")) return;   // 確定の途中の一瞬だけ空になる知らせ
+  const v = normIn(field().value);
+  if (!isNative() || !G || G.phase !== "play" || !G.cur) { if (v || !NI.composing) NI.consumed = v; return; }
+  const t = G.cur.read;
+  // 読み済みの字（フォーカスを移せなかったときだけ使う）を除いた見方を優先し、それだと打ち間違いになるときだけ全体で見直す
+  let s = v;
+  if (NI.consumed && v.startsWith(NI.consumed)) {
+    const stripped = v.slice(NI.consumed.length);
+    if (evalTyped(stripped, t).state !== "bad" || evalTyped(v, t).state === "bad") s = stripped; else NI.consumed = "";
+  } else NI.consumed = "";
+  if (/[a-z]/.test(s)) NI.sawAscii = true;
+  const r = evalTyped(s, t), { k, rest, state } = r;
+  if (k > (G.cur.maxK || 0)) { G.keys += k - (G.cur.maxK || 0); G.cur.maxK = k; }
+  if (k >= t.length && state === "ok") {                       // 打ち切った（余りがローマ字だけなら乗車）
+    G.nat = { k, rest: [], state: "ok" };
+    G.cur.i = t.length; renderReading();
+    boarded();
+    return;
+  }
+  // ミスの数え方：打ち間違いになったとき・打ち間違いのまま字が増えたとき・途中の字を消したとき
+  if (state === "bad" && (NI.state !== "bad" || r.len > NI.len)) miss();
+  else if (NI.state === "pend" && NI.restKana && state === "ok" && r.len < NI.len) miss();
+  if (state === "kanji" && !NI.kanjiWarned) { NI.kanjiWarned = true; toast("変換しないで打ってね", "bad"); }
+  NI.state = state; NI.len = r.len; NI.restKana = state === "pend" && !rest.every(isRoma);
+  G.nat = { k, rest, state };
+  G.cur.i = Math.min(k, t.length - 1);
+  renderReading();
+}
+
+// 入力欄からフォーカスが外れたら「タップしてキーボードを出す」を出す。ゲーム画面のどこを触っても入力欄に戻す
+const inGame = () => G && (G.phase === "ready" || G.phase === "play" || G.phase === "depart");
+const isTouch = matchMedia("(pointer: coarse)").matches;
+const layoutH = () => document.documentElement.clientHeight || innerHeight;
+const keyboardUp = () => window.visualViewport ? visualViewport.height < layoutH() - 100 : true;
+function checkKeyboard() {
+  if (!isNative() || !inGame()) { tapType.hidden = true; return; }
+  const focused = fields.includes(document.activeElement);
+  // Android の「戻る」はフォーカスを残したままキーボードだけ閉じるので、見えている高さでも判定する
+  tapType.hidden = focused && !(isTouch && NI.kbSeen && !keyboardUp());
+}
+
+for (const f of fields) {
+  f.addEventListener("input", nativeInput);
+  f.addEventListener("compositionstart", e => { if (e.target === field()) NI.composing = true; });
+  f.addEventListener("compositionend", e => {
+    if (e.target !== field()) return;
+    NI.composing = false;
+    nativeInput();
+    // 確定し終わって全部読み済みなら、ここで安全に空にできる
+    if (NI.consumed && normIn(field().value) === NI.consumed) { field().value = ""; NI.consumed = ""; }
+  });
+  f.addEventListener("keydown", e => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === "Enter" || e.key === "Tab") e.preventDefault();
+  });
+  f.addEventListener("blur", () => { if (!NI.swapping && isNative() && inGame()) setTimeout(checkKeyboard, 60); });
+  f.addEventListener("focus", () => { tapType.hidden = true; fitViewport(); });
+}
+
+$("screen-game").addEventListener("pointerdown", e => {
+  if (!isNative() || e.target.closest(".hud-btns")) return;
+  e.preventDefault();                        // 触ってもキーボードが閉じないように
+});
+$("screen-game").addEventListener("click", e => {
+  if (!isNative() || !inGame() || e.target.closest(".hud-btns")) return;
+  const focused = fields.includes(document.activeElement);
+  if (focused && !tapType.hidden) field().blur();   // キーボードだけ閉じている → 付け直して出し直す
+  if (!focused || !tapType.hidden) nativeFocus();
+  setTimeout(checkKeyboard, 300);
+});
+// 効果音ボタンを押してもキーボードを閉じない
+$("btn-sound").addEventListener("pointerdown", e => { if (isNative() && inGame()) e.preventDefault(); });
+$("btn-sound").addEventListener("click", () => { if (isNative() && inGame()) nativeFocus(); });
+
+// キーボードが出ている間は、見えている範囲にゲーム画面を収める
+function fitViewport() {
+  const vv = window.visualViewport;
+  if (!vv || !isNative() || screens.game.hidden) { appEl.style.height = ""; return; }
+  if (keyboardUp()) {
+    NI.kbSeen = true;
+    const top = appEl.getBoundingClientRect().top + window.scrollY;
+    appEl.style.height = Math.max(240, vv.height - top) + "px";
+    if (window.scrollY) window.scrollTo(0, 0);
+  } else appEl.style.height = "";
+  checkKeyboard();
+}
+window.visualViewport?.addEventListener("resize", fitViewport);
+window.visualViewport?.addEventListener("scroll", fitViewport);
+
+function nativeStart() {                     // チケットを押した流れのまま呼ぶ（キーボードを出すため）
+  for (const f of fields) f.value = "";
+  NI.fi = 0; NI.consumed = ""; NI.composing = false; NI.kbSeen = false; resetJudge();
+  tapType.hidden = true;
+  nativeFocus(); fitViewport();
+}
+function nativeStop() {
+  for (const f of fields) f.blur();
+  tapType.hidden = true; appEl.style.height = "";
+}
+
+function applyInputMode() {
+  appEl.classList.toggle("native", isNative());
+  document.querySelectorAll("#input-mode .chip").forEach(b => b.setAttribute("aria-pressed", b.dataset.input === opts.input));
+}
+$("input-mode").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  opts.input = b.dataset.input; store.set("input", opts.input); applyInputMode(); renderTickets();
+});
+applyInputMode();
+</script>

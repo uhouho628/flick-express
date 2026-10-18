@@ -1,6 +1,11 @@
 <script>
 // ---- 結果（ご乗車記録） ----
 const SHARE_URL = "https://uhouho628.github.io/flick-express/";
+let shareText = "";
+// 念のため文面をクリップボードにも入れておく（投稿画面が空で開いたときに貼り付けられるように）
+$("btn-share").addEventListener("click", () => {
+  try { navigator.clipboard?.writeText(shareText).then(() => { $("share-note").hidden = false; }).catch(() => {}); } catch (_) {}
+});
 function rankText(r, id) {
   if (r >= 2)   return "乗り放題を使い倒しました。乗り鉄の鑑です";
   if (r >= 1.5) return "かなりおトク。指先が特急並みです";
@@ -15,7 +20,8 @@ function showResult() {
   const kps = G.keys / playSec;
   const acc = G.keys + G.miss ? G.keys / (G.keys + G.miss) * 100 : 0;
   const okN = G.rides.filter(r => r.ok).length, lateN = G.rides.length - okN;
-  const best = store.get("best", {}), bk = bestKey(c.id, G.region);
+  const best = store.get("best", {}), bk = bestKey(c.id, G.region, G.mode);
+  const unit = G.mode === "native" ? "字" : "回";
   const isBest = best[bk] == null || G.fare > best[bk];
   if (isBest) { best[bk] = G.fare; store.set("best", best); }
   const prefN = new Set(G.rides.filter(r => r.ok).map(r => r.pref)).size;
@@ -29,18 +35,24 @@ function showResult() {
       <dt>乗った電車の運賃</dt><dd>${yen(G.fare)}</dd>
       <dt>乗車 / 乗り遅れ</dt><dd>${okN}本 / ${lateN}本</dd>
       <dt>乗った駅の都道府県</dt><dd>${prefN}</dd>
-      <dt class="sum">正しく打ったキー</dt><dd class="sum">${G.keys}回</dd>
+      <dt class="sum">${G.mode === "native" ? "正しく打った字" : "正しく打ったキー"}</dt><dd class="sum">${G.keys}${unit}</dd>
       <dt>ミス</dt><dd>${G.miss}回（正確さ ${acc.toFixed(1)}%）</dd>
-      <dt>平均キータイプ</dt><dd>${kps.toFixed(2)}回/秒</dd>
+      <dt>平均${G.mode === "native" ? "の速さ" : "キータイプ"}</dt><dd>${kps.toFixed(2)}${unit}/秒</dd>
       <dt>最大連続ノーミス</dt><dd>${G.maxCombo}本</dd>
       <dt>ボーナス時間</dt><dd>+${G.bonus}秒</dd>
     </dl>
     <div class="r-rank">${isBest ? '<span class="r-best">自己ベスト更新</span>　' : ""}このコースの自己ベスト ${yen(best[bk])}</div>`;
-  // X（旧Twitter）の投稿画面を開くリンク。claude.ai 版から押しても公開中の GitHub 版を案内する
-  const head = diff > 0 ? yen(diff) + " おトク" : diff === 0 ? "ぴったり元が取れた" : yen(-diff) + " 損";
-  const text = `フリック特急【${rname}・${c.label}】で ${head}！${isBest ? "（自己ベスト更新）" : ""}\n`
-    + `${okN}本に乗車・${prefN}都道府県／正確さ ${acc.toFixed(1)}%・${kps.toFixed(2)}回/秒\n#フリック特急`;
-  $("btn-share").href = "https://x.com/intent/post?" + new URLSearchParams({ text, url: SHARE_URL });
+  // X（旧Twitter）の投稿画面を開くリンク（公式の web intent）。本文の最後の行に GitHub 版の URL を入れる
+  const jpy = n => n.toLocaleString("ja-JP") + "円";
+  const head = diff > 0 ? `${jpy(diff)}得になりました！` : diff === 0 ? "ぴったり元が取れました！" : `${jpy(-diff)}損になりました…`;
+  shareText = [
+    `フリック特急（${rname}・${c.label}）で${head}${isBest ? "（自己ベスト更新）" : ""}`,
+    `${okN}本に乗車・${prefN}都道府県／正確さ${acc.toFixed(1)}%・${kps.toFixed(2)}${unit}/秒`,
+    "#フリック特急",
+    SHARE_URL,
+  ].join("\n");
+  $("btn-share").href = "https://x.com/intent/tweet?text=" + encodeURIComponent(shareText);
+  $("share-note").hidden = true;
   $("history").innerHTML = G.rides.length ? `<h3>乗車履歴</h3><ol>${G.rides.map((r, i) => `
     <li class="${r.ok ? "" : "miss"}"><span>${i + 1}</span><span>${r.disp}<small>${PREFS[r.pref - 1]}</small></span><span>${r.ok ? yen(r.fare) : "乗り遅れ"}</span></li>`).join("")}</ol>` : "";
   show("result");
@@ -51,6 +63,6 @@ syncSoundIcon();
 renderRegions();
 renderTickets();
 show("title");
-addEventListener("keydown", e => { if (e.key === "Escape" && G) quit(); });
+addEventListener("keydown", e => { if (e.key === "Escape" && G && G.mode !== "native" && !e.isComposing) quit(); });
 addEventListener("resize", () => { if (G?.cur) { fitText($("b-dest"), G.cur.disp, 34, "--dest-size"); fitText($("b-read"), G.cur.read.join(""), 22, "--read-size", 1.03); renderReading(); } });
 </script>

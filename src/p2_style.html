@@ -1,6 +1,10 @@
 <style>
 /* ---------- ゲーム画面 ---------- */
-#screen-game{touch-action:none}
+#screen-game{touch-action:none;position:relative}
+/* スマホ・PCのキーボードで打つとき：画面のキーは隠し、見えない入力欄に打つ（16px 未満だと iPhone が拡大する） */
+#app.native .kbd{display:none}
+.native-in{position:absolute;left:0;top:0;width:100%;height:44px;opacity:0;pointer-events:none;font-size:16px;color:transparent;caret-color:transparent;background:transparent;border:0;padding:0}
+.tap-type{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;border:none;border-radius:999px;padding:12px 20px;font-weight:900;font-size:15px;background:var(--fg);color:var(--bg);box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;white-space:nowrap}
 .hud{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding-inline:12px;padding-block:8px 6px}
 .hud-time{font-variant-numeric:tabular-nums;font-weight:900;font-size:22px;line-height:1;min-width:4.2em}
 .hud-time small{font-size:11px;font-weight:700;color:var(--muted);margin-left:2px}
@@ -36,6 +40,7 @@
 .reading .done{color:var(--led);text-shadow:0 0 5px rgba(255,163,26,.5)}
 .reading .pend{color:#0c0d0e;background:var(--led);border-radius:1px}
 .reading .rest{color:var(--led-rest)}
+.reading .bad{color:#0c0d0e;background:var(--led-red);border-radius:1px}
 .reading .cur{color:#fff4dc;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:2px}
 .board.miss{animation:boardMiss .22s,boardFlash .35s}
 @keyframes boardMiss{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
@@ -119,6 +124,7 @@
 .btn{border:none;border-radius:10px;padding:13px 10px;font-weight:900;font-size:15px;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-soft)}
 .btn.primary{background:var(--line);color:#fff;box-shadow:none}
 .btn.share{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--x-bg);color:var(--x-fg);box-shadow:none;text-decoration:none;text-align:center}
+.share-note{margin:-6px 0 0;font-size:12px;color:var(--muted);text-align:center}
 .btn.share svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
 .btn:focus-visible{outline:3px solid var(--pop-hit);outline-offset:2px}
 @keyframes toastFade{0%,80%{opacity:1}100%{opacity:0}}
@@ -139,5 +145,6 @@
   .hud{grid-column:1;grid-row:1}.board{grid-column:1;grid-row:2}.scene{grid-column:1;grid-row:3}
   .kbd{grid-column:2;grid-row:1/4;grid-template-rows:repeat(4,minmax(0,1fr));padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
   .key{height:auto}
+  #app.native #screen-game{grid-template-columns:minmax(0,1fr)}   /* キーボード入力のときは右の列を使わない */
 }
 </style>
